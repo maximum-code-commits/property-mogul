@@ -1,0 +1,84 @@
+<title>Property Mogul</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Lilita+One&display=swap">
+<style>/*CSS*/</style>
+
+<div id="app">
+  <canvas id="city" aria-label="The city of Centropolis. Drag to move, pinch or scroll to zoom, tap a building to inspect it."></canvas>
+
+  <div id="hud" hidden>
+    <button id="districtBtn" class="banner" aria-label="Choose a suburb"><span>Lychee</span></button>
+    <div id="toasts" aria-live="polite"></div>
+
+    <div id="stats">
+      <div class="stat" id="stNet" title="Net worth"><span id="vNet">$0</span><i data-icon="bank"></i></div>
+      <div class="stat" id="stCash" title="Cash"><span id="vCash">$0</span><i data-icon="coin"></i></div>
+      <div class="stat" id="stRep" title="Reputation"><span id="vRep">0</span><i data-icon="thumb"></i></div>
+      <div class="stat" id="stProps" title="Properties owned"><span id="vProps">0</span><i data-icon="house"></i></div>
+    </div>
+
+    <nav id="side" aria-label="Game menu">
+      <button class="rbtn" id="btnPortfolio" data-icon="case" aria-label="My portfolio" title="My portfolio"></button>
+      <button class="rbtn" id="btnCompany" data-icon="people" aria-label="Company: team, investors, skills, school" title="Company"><i class="nbadge" hidden></i></button>
+      <button class="rbtn" id="btnCity" data-icon="city" aria-label="City: suburbs, council, community" title="City"></button>
+      <button class="rbtn" id="btnMarket" data-icon="shop" aria-label="Marketplace and stocks" title="Marketplace"></button>
+      <button class="rbtn" id="btnHome" data-icon="heart" aria-label="Your home and parties" title="Home &amp; parties"></button>
+      <button class="rbtn" id="btnStats" data-icon="chart" aria-label="Stats and achievements" title="Stats"></button>
+      <button class="rbtn" id="btnSettings" data-icon="gear" aria-label="Settings" title="Settings"></button>
+    </nav>
+
+    <div id="timebar">
+      <div class="tb-btns">
+        <button data-speed="0" data-icon="pause" aria-label="Pause" title="Pause (space)"></button>
+        <button data-speed="1" data-icon="play" aria-label="Play" title="Play (1)"></button>
+        <button data-speed="2" data-icon="ff" aria-label="Fast" title="Fast (2)"></button>
+        <button data-speed="3" data-icon="fff" aria-label="Fastest" title="Fastest (3)"></button>
+        <button id="btnFull" class="tb-x" data-icon="full" aria-label="Full screen" title="Full screen"></button>
+        <button id="btnMusic" class="tb-x" data-icon="music" aria-label="Music" title="Music"></button>
+      </div>
+      <div class="tb-date"><i id="dFill"></i><span id="dMon">JAN</span><span id="dYear">2026</span></div>
+    </div>
+
+    <button class="harrow left" id="prevD" aria-label="Previous suburb"><svg viewBox="0 0 64 44" aria-hidden="true"><path d="M3 22 28 3v11h33v16H28v11z"/></svg></button>
+    <button class="harrow right" id="nextD" aria-label="Next suburb"><svg viewBox="0 0 64 44" aria-hidden="true"><path d="M61 22 36 3v11H3v16h33v11z"/></svg></button>
+
+    <button id="btnSave" class="savebtn" data-icon="save" aria-label="Save game" title="Save game"></button>
+    <button id="agentBtn" class="agentbtn" aria-label="Ask your agent for a tip" title="Ask your agent"><span id="agentFace"></span><b id="lvlBadge">Lv 1</b></button>
+    <div id="agentTip" class="agent-tip" hidden><p></p></div>
+    <div id="tip" class="tip" hidden></div>
+  </div>
+
+  <div id="modal" hidden>
+    <div class="backdrop"><canvas id="blur"></canvas></div>
+    <div id="sheet" class="sheet" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <div id="title">
+    <div class="rays"></div>
+    <div class="glow"></div>
+    <div id="skyline" class="skyline"></div>
+    <div class="t-inner">
+      <h1 class="logo" aria-label="Property Mogul">
+        <svg class="roof" viewBox="0 0 320 80" aria-hidden="true"><path d="M18 72 160 12l142 60" fill="none" stroke="currentColor" stroke-width="15" stroke-linejoin="miter"/><path d="M222 20h22v36h-22z" fill="currentColor"/></svg>
+        <span class="l1">Property</span><span class="l2">Mogul</span>
+      </h1>
+      <p class="tagline">Buy, rent and flip your way to the top of Centropolis</p>
+      <div id="tMenu" class="t-menu">
+        <button id="tContinue" class="btn btn-big btn-go" hidden>Continue</button>
+        <button id="tNewBtn" class="btn btn-big">New Game</button>
+        <button id="tHow" class="btn">How to Play</button>
+      </div>
+      <form id="tNew" class="t-new" hidden autocomplete="off">
+        <label for="mogulName" class="t-lab">Your mogul name</label>
+        <input id="mogulName" maxlength="20" placeholder="e.g. Max Moneybags" enterkeyhint="go">
+        <fieldset><legend class="t-lab">Choose your agent</legend><div id="agents" class="agents"></div></fieldset>
+        <div class="t-row">
+          <button type="submit" class="btn btn-big btn-go">Start with $1,000,000</button>
+          <button type="button" id="tBack" class="btn">Back</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>/*JS*/</script>

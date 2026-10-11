@@ -1,0 +1,13 @@
+{
+  "name": "property-mogul",
+  "version": "2.0.0",
+  "description": "An isometric property-tycoon browser game set in the island city of Centropolis.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node server.js",
+    "dev": "node build.mjs && node server.js"
+  }
+}
