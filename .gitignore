@@ -3,3 +3,6 @@ dist/
 .claude/
 .DS_Store
 .data/
+.env
+.env.*
+.neon

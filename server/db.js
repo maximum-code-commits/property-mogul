@@ -129,8 +129,10 @@ let impl = null;
 
 async function openPg() {
   const { default: pg } = await import('pg');
+  // Neon URLs say sslmode=require; pg already treats that as full verification, so say so explicitly.
+  const url = config.DATABASE_URL.replace(/([?&]sslmode=)(require|prefer|verify-ca)\b/, '$1verify-full');
   const pool = new pg.Pool({
-    connectionString: config.DATABASE_URL,
+    connectionString: url,
     max: 8,
     idleTimeoutMillis: 20000,
     ssl: /sslmode=disable/.test(config.DATABASE_URL) || /localhost|127\.0\.0\.1/.test(config.DATABASE_URL) ? false : { rejectUnauthorized: true },
