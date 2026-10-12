@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
 
 const env = process.env;
 const PORT = Number(env.PORT) || 8080;
-const PUBLIC_URL = (env.PUBLIC_URL || (env.RAILWAY_PUBLIC_DOMAIN ? `https://${env.RAILWAY_PUBLIC_DOMAIN}` : `http://localhost:${PORT}`)).replace(/\/+$/, '');
+// Only the origin matters (scheme + host). Anything after it, like a pasted callback path, is ignored.
+const PUBLIC_URL = new URL(env.PUBLIC_URL || (env.RAILWAY_PUBLIC_DOMAIN ? `https://${env.RAILWAY_PUBLIC_DOMAIN}` : `http://localhost:${PORT}`)).origin;
 const PROD = env.NODE_ENV === 'production' || !!env.RAILWAY_ENVIRONMENT;
 
 let secret = env.SESSION_SECRET;
