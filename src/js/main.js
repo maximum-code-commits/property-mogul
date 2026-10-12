@@ -40,21 +40,20 @@ const Cloud = {
 
 const Game = {
   KEY: 'pm-save-v3',
-  running: false, cloudSave: null, lastCloud: 0, lastPost: 0, acc: 0, tipT: 0, _t: 0,
+  running: false, cloudSave: null, netSave: null, lastCloud: 0, lastPost: 0, acc: 0, tipT: 0, _t: 0,
   local() {
     try { const raw = Store.get(this.KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
   },
-  hasSave() { return this.local() || this.cloudSave; },
+  hasSave() { return this.local() || this.cloudSave || this.netSave; },
   best() {
-    const a = this.local(), b = this.cloudSave;
-    if (a && b) return (b.t || 0) > (a.t || 0) ? b : a;
-    return a || b;
+    return [this.local(), this.cloudSave, this.netSave].filter(Boolean).sort((a, b) => (b.t || 0) - (a.t || 0))[0] || null;
   },
   save(manual) {
     if (!G || !this.running) return;
     const json = JSON.stringify(G), t = Date.now();
     const okLocal = Store.set(this.KEY, JSON.stringify({ t, json }));
     UI.lastSaved = t;
+    Net.pushSave(t, json, manual);
     if (Cloud.ready && (manual || t - this.lastCloud > 45000)) {
       Cloud.write(`data/users/${Cloud.uid}/save3`, { t, json });
       this.lastCloud = t;
@@ -64,7 +63,7 @@ const Game = {
       Cloud.write('leaderboard/' + Cloud.uid, { name: String(G.mogul).slice(0, 24), net: Math.round(tt.net), props: tt.props, year: dateLabel().year, t });
       this.lastPost = t;
     }
-    if (manual) UI.toast({ kind: 'save', title: 'Game saved', text: Cloud.ready ? 'Saved to your account and this browser.' : okLocal ? 'Saved in this browser.' : 'This browser blocked saving.', life: 2400 });
+    if (manual) UI.toast({ kind: 'save', title: 'Game saved', text: Cloud.ready || Net.on ? 'Saved to your account and this browser.' : okLocal ? 'Saved in this browser.' : 'This browser blocked saving.', life: 2400 });
   },
   saveSoon() { clearTimeout(this._t); this._t = setTimeout(() => this.save(), 1200); },
   enterCity(isNew) {
@@ -86,14 +85,15 @@ const Game = {
     G.bankrupt = false;
     Sound.unlock();
     this.save();
+    setTimeout(() => Net.sync(true), 1500);
   },
-  startNew(name, agentId) {
-    newGame(name, agentId);
+  startNew(name, agentId, seed) {
+    if (seed != null) newGame(name, agentId, seed); else newGame(name, agentId);
     Store.set('pm-name', name);
     this.enterCity(true);
   },
   resume(save) {
-    try { const d = JSON.parse(save.json); if (d.v !== 3) throw new Error('old save'); loadGame(d); } catch (e) { UI.showTitle('new'); return; }
+    try { const d = JSON.parse(save.json); if (d.v !== 3 && d.v !== 4) throw new Error('old save'); loadGame(d); } catch (e) { UI.showTitle('new'); return; }
     this.enterCity(false);
   },
 };
@@ -115,7 +115,7 @@ function loop(now) {
         if (G.month % 3 === 0) Game.save();
       }
     }
-    if (!Modal.open && G.queue.length && $('#title').hidden) Decision.open();
+    if (!Modal.open && G.queue.length && $('#title').hidden) { if (G.queue[0].type === 'succession') Succession.open(); else Decision.open(); }
     const f = UI.speed ? Math.round(Game.acc / MONTH_MS[UI.speed] * 100) / 100 : _fill;
     if (f !== _fill) { _fill = f; $('#dFill').style.transform = `scaleX(${clamp(f, 0, 1)})`; }
     if (View.active) drawFrame(dt);
@@ -179,8 +179,9 @@ function boot(hot) {
     e.preventDefault();
     const name = ($('#mogulName').value || '').trim().slice(0, 20) || 'Mogul';
     const ag = ($('input[name="agent"]:checked') || {}).value || AGENTS[0].id;
+    const cs = $('#tCity').hidden ? '' : $('#citySel').value;
     Sound.unlock(); Sound.play('buy');
-    Game.startNew(name, ag);
+    Game.startNew(name, ag, cs ? +cs : null);
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden) Game.save(); });
   window.addEventListener('pagehide', () => Game.save());
@@ -197,6 +198,12 @@ function boot(hot) {
   } else {
     UI.showTitle();
   }
+  Net.init().then(async () => {
+    UI.socialBadge();
+    if (!Game.running && !$('#title').hidden) TitleOnline.render();
+    const n = await Net.loadSave();
+    if (n) { Game.netSave = n; if (!Game.running && !$('#title').hidden && $('#tNew').hidden) $('#tContinue').hidden = false; }
+  });
   Cloud.init().then(async () => {
     const c = await Cloud.loadSave();
     if (c) { Game.cloudSave = c; if (!Game.running && !$('#title').hidden && $('#tNew').hidden) $('#tContinue').hidden = false; }
@@ -211,3 +218,6 @@ function boot(hot) {
   } catch (e) { /* fall through */ }
   boot((h && h.data) || {});
 })();
+
+// local development only: lets a console reach into the game's scope
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__pm = (src) => eval(src);

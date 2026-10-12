@@ -193,6 +193,7 @@ const UI = {
     $('#btnCity').onclick = () => City.open();
     $('#btnMarket').onclick = () => Market.open();
     $('#btnHome').onclick = () => HomeView.open();
+    $('#btnSocial').onclick = () => Social.open();
     $('#btnStats').onclick = () => Stats.open();
     $('#btnSettings').onclick = () => Settings.open();
     $('#districtBtn').onclick = () => City.open('suburbs');
@@ -248,6 +249,7 @@ const UI = {
   },
   hud() {
     if (!G) return;
+    this.socialBadge();
     const t = totals();
     const set = (id, v) => { const el = $(id); if (el.textContent !== v) { el.textContent = v; el.parentElement.classList.remove('bump'); void el.offsetWidth; el.parentElement.classList.add('bump'); } };
     const narrow = window.innerWidth < 560;
@@ -382,7 +384,15 @@ const UI = {
     $('#tContinue').hidden = !has || mode === 'new';
     $('#tMenu').hidden = mode === 'new';
     $('#tNew').hidden = mode !== 'new';
-    if (mode === 'new') this.renderNew();
+    if (mode === 'new') { this.renderNew(); TitleOnline.cities(); }
+    TitleOnline.render();
+  },
+  socialBadge() {
+    const b = $('#btnSocial .nbadge');
+    if (!b) return;
+    const n = Net.on ? Net.counts.requests + Net.counts.deals : 0;
+    b.textContent = n ? String(n) : ''; b.hidden = !n;
+    $('#btnSocial').hidden = !Net.avail;
   },
   renderNew() {
     const wrap = $('#agents');
@@ -407,6 +417,8 @@ const Settings = {
     const tog = (k, label) => `<div class="ctl"><span class="ctl-l">${label}</span><button class="toggle ${s[k] ? 'on' : ''}" data-act="tog" data-v="${k}" aria-pressed="${!!s[k]}" aria-label="${label}"><i></i></button></div>`;
     Modal.sheet.innerHTML = panelHTML('Settings', `<div class="settings">
         ${tog('music', 'Music')}${tog('sfx', 'Sound effects')}${tog('pins', 'Map pins')}
+        <div class="ctl"><span class="ctl-l">Auto-renovate (default)</span><button class="toggle ${G.autoReno.on ? 'on' : ''}" data-act="ar" aria-pressed="${G.autoReno.on}" aria-label="Auto-renovate by default"><i></i></button></div>
+        <div class="field"><label for="arAt">Renovate below <b>${Math.round(G.autoReno.at * 100)}%</b> condition, keeping <b>${fmtShort(G.autoReno.buffer)}</b> in cash</label><input type="range" id="arAt" min="30" max="85" step="5" value="${Math.round(G.autoReno.at * 100)}"><input type="range" id="arBuf" min="0" max="500000" step="25000" value="${G.autoReno.buffer}" aria-label="Cash to keep"></div>
         <div class="ctl"><span class="ctl-l">Graphics</span><div class="seg">${['low', 'auto', 'high'].map((q) => `<button class="${s.quality === q ? 'on' : ''}" data-act="quality" data-v="${q}">${q[0].toUpperCase() + q.slice(1)}</button>`).join('')}</div></div>
         <div class="set-btns">
           <button class="btn" data-act="save">${icon('save')} Save Game</button>
@@ -418,12 +430,14 @@ const Settings = {
       </div>`, { cls: '' });
     $('.mog', Modal.sheet).textContent = G.mogul;
   },
+  change(t) { if (t.id === 'arAt') G.autoReno.at = +t.value / 100; if (t.id === 'arBuf') G.autoReno.buffer = +t.value; this.render(); },
   act(a, el) {
     const s = UI.settings;
     switch (a) {
       case 'close': Sound.play('click'); Modal.close(); return;
       case 'tog': s[el.dataset.v] = !s[el.dataset.v]; UI.applySettings(); Sound.play('tab'); break;
       case 'quality': s.quality = el.dataset.v; UI.applySettings(true); Sound.play('tab'); break;
+      case 'ar': G.autoReno.on = !G.autoReno.on; Sound.play('tab'); break;
       case 'save': Game.save(true); Sound.play('coin'); break;
       case 'help': Help.open(); return;
       case 'menu': Game.save(); Modal.close(); Game.running = false; UI.showTitle(); return;

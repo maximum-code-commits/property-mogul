@@ -263,6 +263,7 @@ function assetArt(A) {
     truck: `<rect x="10" y="16" width="58" height="32" rx="4" fill="${c}"/><rect x="68" y="26" width="18" height="22" rx="3" fill="${shade(c, -0.15)}"/><rect x="18" y="22" width="40" height="12" fill="#fff6e8"/><path d="M14 16h54l-4-8H18z" fill="#d64b3c"/><text x="38" y="31" text-anchor="middle" font-size="8" font-weight="800" fill="#d64b3c">TACOS</text><circle cx="26" cy="50" r="6" fill="#2b2420"/><circle cx="72" cy="50" r="6" fill="#2b2420"/>`,
     horse: `<path d="M24 44l4-16q2-8 12-8h20l8-10 6 2-4 12q0 8-8 10v10" fill="none" stroke="${c}" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 44v12M44 46v10M58 46v10M66 44v12" stroke="${c}" stroke-width="5" stroke-linecap="round"/><path d="M64 14q-8-2-10 6" stroke="#2b2420" stroke-width="3" fill="none"/>`,
     plantation: `<circle cx="78" cy="14" r="9" fill="#ffd34d"/>${[0, 1, 2].map((r2) => [0, 1, 2, 3, 4].map((k) => `<circle cx="${14 + k * 17 + r2 * 4}" cy="${30 + r2 * 10}" r="6" fill="${r2 % 2 ? '#3e9b4f' : '#5aa846'}"/>`).join('')).join('')}`,
+    skis: `<path d="M14 50 78 14M26 54 90 18" stroke="${c}" stroke-width="6" stroke-linecap="round"/><path d="M40 22v34M50 22v34" stroke="#8a8f99" stroke-width="3"/><circle cx="40" cy="20" r="3" fill="#d64b3c"/><circle cx="50" cy="20" r="3" fill="#d64b3c"/>`,
     island: `<ellipse cx="48" cy="50" rx="44" ry="8" fill="#7fd0e8"/><ellipse cx="48" cy="46" rx="26" ry="7" fill="#f3e2a9"/><path d="M48 44q4-16 0-28" stroke="#8a6a44" stroke-width="3" fill="none"/>${[0, 1, 2, 3, 4].map((k) => `<ellipse cx="${48 + Math.cos(k * 1.3) * 9}" cy="${16 + Math.sin(k * 1.3) * 3}" rx="10" ry="3" transform="rotate(${k * 40 - 60} ${48} ${16})" fill="#3e9b4f"/>`).join('')}`,
   };
   return `<svg viewBox="0 0 96 64" class="asset-art" aria-hidden="true">${arts[A.art] || arts.car}</svg>`;
@@ -315,10 +316,12 @@ const Market = {
 
 // ───────── home & parties ─────────
 const HomeView = {
-  party: 'bbq', guests: { investors: true, staff: true, neighbours: true }, result: null,
-  open() { this.result = null; Sound.play('click'); Modal.show('m-panel m-narrow', this); },
+  party: 'bbq', guests: { investors: true, staff: true, neighbours: true }, result: null, tab: 'home',
+  open(tab) { this.result = null; if (tab) this.tab = tab; Sound.play('click'); Modal.show('m-panel', this); },
   render() {
     let inner;
+    if (this.tab === 'family') return this.renderFamily();
+    if (this.tab === 'clubs') return this.renderClubs();
     if (this.result) {
       const r = this.result;
       const faces = [];
@@ -340,7 +343,43 @@ const HomeView = {
       const vs = venueScore();
       inner = `<div class="home-card"><img src="${thumbURL(eff(L), 120, 90)}" alt="" width="120" height="90"><div><b>${esc(KINDS[kindOf(L)].name)} · ${esc(L.addr)}</b><span>${esc(DISTRICT_BY_ID[L.dist].name)} · venue rating ${vs.score.toFixed(2)}×</span><div class="chips">${tagsOf(L, lotState(L.id)).map((t) => chip(t)).join('')}</div><button class="linkbtn" data-act="gohome">Open property</button></div></div>` + this.planner();
     }
-    Modal.sheet.innerHTML = panelHTML(G.home == null ? 'Your Home' : 'Home Sweet Home', inner);
+    Modal.sheet.innerHTML = panelHTML('Life', this.tabs() + inner);
+  },
+  tabs() { return tabsHTML([['home', 'Home & Parties'], ['family', 'Family'], ['clubs', 'Clubs', Object.keys(G.clubs).length]], this.tab); },
+  renderFamily() {
+    const F = G.fam, h = famHead();
+    const person = (m, extra = '') => {
+      const lk = lookFor('family', m.seed);
+      return `<div class="fm ${m.alive ? '' : 'dead'} ${m.id === F.head ? 'head' : ''}"><i>${charSVG(lk, 'face', m.alive ? 'happy' : 'sad')}</i><b>${esc(m.first)} ${esc(F.name)}</b><small>${m.alive ? `${ageAt(m)} yrs` : `† ${ageAt(m)} yrs`} · ${TRAIT_BY_ID[m.trait].name}${extra}</small></div>`;
+    };
+    const sp = spouseOf(h);
+    const kids = F.members.filter((m) => m.parent === h.id);
+    const sibs = F.members.filter((m) => m.role === 'child' && m.parent !== h.id && m.id !== h.id);
+    const odds = Math.round(100 * Math.exp(-Array.from({ length: Math.max(0, 80 - ageAt(h)) }, (_, k) => 0.0004 * Math.exp(0.09 * (ageAt(h) + k - 30))).reduce((a, b) => a + b, 0)));
+    const inner = `<div class="dyn-head"><h3>The ${esc(F.name)} dynasty</h3><span>Generation ${F.gen}${G.lineage.length ? ` · ${G.lineage.length} past head${G.lineage.length > 1 ? 's' : ''}` : ''}</span></div>
+      <div class="famrow">${person(h, ' · head of the family')}${sp ? person(sp, ' · spouse') : '<div class="fm empty"><i>?</i><small>Single. Love might find you.</small></div>'}</div>
+      <p class="hint">${TRAIT_BY_ID[h.trait].name}: ${TRAIT_BY_ID[h.trait].desc} · ${odds}% chance of seeing 80, with luck and a fun life.</p>
+      <h3 class="sub">Children</h3>${kids.length ? `<div class="famrow">${kids.map((k) => person(k, ageAt(k) < 18 ? ' · too young to inherit' : '')).join('')}</div>` : '<p class="muted">No children yet.</p>'}
+      ${sibs.length ? `<h3 class="sub">Brothers & sisters</h3><div class="famrow">${sibs.map((k) => person(k)).join('')}</div>` : ''}
+      <h3 class="sub">Family history</h3>${G.lineage.length ? `<ol class="lineage">${G.lineage.map((l) => `<li><b>${esc(l.first)} ${esc(F.name)}</b> ${START_YEAR + Math.floor(l.born / 12)}–${START_YEAR + Math.floor(l.died / 12)} · left an estate of ${fmtShort(l.net)}</li>`).join('')}</ol>` : '<p class="muted">You’re the founder. Make it a good story.</p>'}
+      <p class="panel-note">When the head of the family dies, you choose an heir from adult children, a spouse or siblings. The heir keeps the business, the skills and the staff, pays 10% estate tax on cash, and inherits 60% of the reputation.</p>`;
+    Modal.sheet.innerHTML = panelHTML('Life', this.tabs() + inner);
+  },
+  renderClubs() {
+    const inner = `<div class="cards">${CLUBS.map((C) => {
+      const m = G.clubs[C.id], ok = C.test();
+      const vehicles = G.assets.filter((a) => CLUB_VEHICLES[C.id].includes(a.id));
+      const next = 3 - (G.month % 3);
+      return `<div class="card ${m ? 'hired' : ''}" style="--cc:${C.color}"><div class="card-top"><i class="face club" style="background:${C.color}">${icon({ yacht: 'star', car: 'bolt', ski: 'medal', golf: 'trophy' }[C.id])}</i><div><b>${esc(C.name)}</b><small>${C.event} every 3 months</small></div><span class="price">${fmtShort(C.fee)}</span></div>
+        <p>${esc(C.blurb)}</p>
+        <div class="buffs">${Object.entries(C.buffs).map(([k, v]) => `<span>+${v} ${k}</span>`).join('')}<span class="muted">${fmt$(C.dues)}/mo dues</span></div>
+        ${m ? `<p class="hint">Member since ${MONTHS[m.since % 12]} ${dateLabel(m.since).year} · ${m.wins} podium${m.wins === 1 ? '' : 's'}${m.last ? ` · last ${C.event.toLowerCase()}: place ${m.last.place}` : ''} · next in ${next} month${next === 1 ? '' : 's'}</p>
+          ${CLUB_VEHICLES[C.id].length ? `<div class="placed"><small>Show at the club:</small>${vehicles.length ? vehicles.map((a) => `<button class="pchip ${m.placed.includes(a.uid) ? 'on' : ''}" data-act="place" data-club="${C.id}" data-v="${a.uid}">${esc(ASSET_BY_ID[a.id].name)}</button>`).join('') : '<span class="muted">Buy one in the Marketplace.</span>'}</div>` : ''}
+          <div class="row"><button class="btn btn-sm" data-act="venue" data-v="${C.id}">Visit the Club</button><button class="btn btn-sm btn-warn" data-act="leave" data-v="${C.id}">Leave</button></div>`
+          : `<p class="${ok ? 'up' : 'muted'}">${ok ? 'You qualify.' : 'Members need ' + C.needs + '.'}</p><button class="btn btn-sm btn-go" data-act="join" data-v="${C.id}" ${ok && C.fee <= G.cash ? '' : 'disabled'}>Join ${fmtShort(C.fee)}</button>`}
+      </div>`;
+    }).join('')}</div><p class="panel-note">Vehicles you show at a club appear at its venue on the map. Friends who play online show up there too.</p>`;
+    Modal.sheet.innerHTML = panelHTML('Life', this.tabs() + inner);
   },
   planner() {
     const ready = partyReady();
@@ -360,6 +399,11 @@ const HomeView = {
     if (a === 'gohome') { const L = CITY.lots[G.home]; Modal.close(); lookAtLot(L); setTimeout(() => PV.open(L.id), 250); return; }
     if (a === 'throw') { const r = throwParty(this.party, this.guests); if (!r.ok) { UI.toast({ kind: 'disaster', title: 'Party cancelled', text: r.reason }); Sound.play('error'); } else { this.result = r; Sound.play('ach'); UI.afterChange(); } }
     if (a === 'done') this.result = null;
+    if (a === 'tab') { this.tab = v; this.result = null; Sound.play('tab'); }
+    if (a === 'join') { const r = joinClub(v); if (!r.ok) { UI.toast({ kind: 'disaster', title: 'Can’t join yet', text: r.reason || '' }); Sound.play('error'); } else { Sound.play('ach'); UI.afterChange(); } }
+    if (a === 'leave') { leaveClub(v); Sound.play('tab'); }
+    if (a === 'place') { togglePlaced(el.dataset.club, v); Sound.play('tab'); }
+    if (a === 'venue') { const L = View.venues[v]; if (L) { Modal.close(); lookAtLot(L, 1.2); } return; }
     this.render();
   },
 };
@@ -383,7 +427,8 @@ const Stats = {
       for (const p of this.players) if (p.id !== Cloud.uid) rows.push({ name: p.name, worth: p.net, props: p.props, who: 'player', year: p.year });
       rows.sort((a, b) => b.worth - a.worth);
       inner = `<ol class="board">${rows.map((r, i) => `<li class="${r.who}"><span class="rank">${i + 1}</span><span class="who"><b></b><small>${r.who === 'you' ? 'You' : r.who === 'ai' ? 'Rival mogul' : 'Player' + (r.year ? ' · ' + r.year : '')}${r.props != null ? ' · ' + r.props + ' properties' : ''}</small></span><span class="worth">${fmtShort(r.worth)}</span></li>`).join('')}</ol>
-        <p class="panel-note">${Cloud.ready ? 'Players who open this game appear here as they play.' : 'Rival moguls are computer players. Real players show up when the game is opened from its shared link while signed in.'}</p>`;
+        <p class="panel-note">${Net.avail ? 'Rival moguls are computer players. For real players, friends and co-op deals, open the online leaderboard.' : Cloud.ready ? 'Players who open this game appear here as they play.' : 'Rival moguls are computer players. Real players show up when the game is opened from its shared link while signed in.'}</p>
+        ${Net.avail ? '<p class="panel-note"><button class="btn btn-go" data-act="online">Online Leaderboard</button></p>' : ''}`;
       this._rows = rows;
     }
     Modal.sheet.innerHTML = panelHTML('Stats', tabsHTML([['chart', 'Net Worth'], ['ach', 'Achievements'], ['board', 'Top Moguls']], this.tab) + inner);
@@ -392,6 +437,7 @@ const Stats = {
   },
   act(a, el) {
     if (closeAct(a)) return;
+    if (a === 'online') { Social.open('board'); return; }
     if (a === 'tab') { this.tab = el.dataset.v; Sound.play('tab'); }
     if (a === 'series') { this.series = el.dataset.v; Sound.play('tab'); }
     this.render();
@@ -433,5 +479,33 @@ const Decision = {
     if (a === 'next') {
       if (G.queue.length) { Modal.close(); this.open(); } else Modal.close();
     }
+  },
+};
+
+// ───────── succession ─────────
+const Succession = {
+  sticky: true, done: null,
+  open() { this.done = null; Sound.play('bad'); Modal.show('m-panel m-narrow', this); },
+  render() {
+    const F = G.fam, h = famHead(), t = totals();
+    if (this.done) {
+      const { heir, tax } = this.done;
+      Modal.sheet.innerHTML = `<div class="panel decide succ"><div class="succ-face">${charSVG(lookFor('family', heir.seed), 'full', 'wow')}</div><div class="dec-card"><h2>Long live ${esc(heir.first)}!</h2>
+        <p>${esc(heir.first)} ${esc(F.name)} now runs the family empire${heir.relation ? ' (a nephew from out of town)' : ''}. Trait: <b>${TRAIT_BY_ID[heir.trait].name}</b>, ${TRAIT_BY_ID[heir.trait].desc.toLowerCase()}</p>
+        <p>${tax ? `Estate tax took ${fmt$(tax)}. ` : ''}Reputation carried over: ${Math.round(G.rep)}. Degrees don’t pass down, but skills and staff do.</p>
+        <button class="btn btn-go" data-act="go">Continue the Story</button></div></div>`;
+      return;
+    }
+    const heirs = heirsOf(h);
+    Modal.sheet.innerHTML = `<div class="panel decide succ"><div class="succ-face">${charSVG(lookFor('family', h.seed), 'full', 'sad')}</div><div class="dec-card">
+      <h2>Farewell, ${esc(h.first)}</h2>
+      <p>${esc(h.first)} ${esc(F.name)} (${START_YEAR + Math.floor(h.born / 12)}–${START_YEAR + Math.floor((h.died ?? G.month) / 12)}) passed away peacefully at ${ageAt(h)}, after a long life in property. The estate is worth <b>${fmt$(t.net)}</b> across <b>${t.props}</b> properties.</p>
+      <p>Who takes over the family business?</p>
+      <div class="choices">${heirs.length ? heirs.map((m) => `<button class="btn heir" data-act="heir" data-v="${m.id}"><i>${charSVG(lookFor('family', m.seed), 'face')}</i><span>${esc(m.first)} · ${ageAt(m)} · ${m.role === 'spouse' ? 'spouse' : m.parent === h.id ? 'child' : 'sibling'}<small>${TRAIT_BY_ID[m.trait].name}: ${TRAIT_BY_ID[m.trait].desc}</small></span></button>`).join('') : '<button class="btn btn-go" data-act="heir" data-v="-1">Call the long-lost nephew</button>'}</div>
+    </div></div>`;
+  },
+  act(a, el) {
+    if (a === 'heir') { this.done = inherit(+el.dataset.v); Sound.play('ach'); UI.afterChange(); $('#agentFace').innerHTML = charSVG(AGENT_BY_ID[G.agentId].look, 'face'); this.render(); }
+    if (a === 'go') { Modal.close(); Game.save(); }
   },
 };

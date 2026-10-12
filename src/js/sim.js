@@ -96,6 +96,7 @@ function tagsOf(L, st) {
     if (K.pool) t.push('pool');
   }
   if (L.water) t.push('waterfront');
+  if (K.cat !== 'civic' && K.cat !== 'land' && E.kind !== 'site' && isHistoric(L, st)) t.push('historic');
   const u = (st && st.o && st.ups) || {};
   for (const k in u) if (u[k] && UPGRADES[k] && UPGRADES[k].tag && !t.includes(UPGRADES[k].tag)) t.push(UPGRADES[k].tag);
   return t;
@@ -126,6 +127,8 @@ function valueOf(L, E, st) {
   for (const k in u) if (u[k] && UPGRADES[k] && UPGRADES[k].val) v *= 1 + UPGRADES[k].val;
   if (st && st.built && hasSkill('dev3')) v *= 1.1;
   if (st && st.afford) v *= 0.92;
+  if (isHistoric(L, st)) v *= 1.12;
+  v *= 1 + prestigeOf(L, st) / 600;
   return Math.max(v, land * 1.05);
 }
 function lotValue(L, st = G.lots[L.id]) { return valueOf(L, eff(L), st); }
@@ -183,7 +186,9 @@ function holdCosts(L, st) {
   if (!K.yield) return { ins: 0, maint: v * 0.0003 };
   const ins = K.strata ? v * 0.0035 / 12 : (st.ins ? v * 0.002 / 12 : 0);
   let maint = v * 0.0006;
-  if (st.ups && st.ups.solar) maint *= 0.85;
+  for (const k in st.ups || {}) if (st.ups[k] && UPGRADES[k] && UPGRADES[k].maint) maint *= 1 + UPGRADES[k].maint;
+  if (headTrait('thrifty')) maint *= 0.92;
+  if (st.mode === 'stay') maint *= 1.3;
   if (hasStaff('handy')) maint *= 1 - 0.25 * staffPower('handy');
   const units = st.units || [];
   if (units.length) { const net = units.filter((u) => u && u.r && u.net).length / units.length; maint *= 1 - 0.7 * net; }
@@ -232,8 +237,12 @@ function totals() {
   const pl = (G.ploans || []).reduce((s, p) => s + p.bal, 0);
   const assets = (G.assets || []).reduce((s, a) => s + a.value, 0);
   const stocks = Object.entries(G.stk || {}).reduce((s, [, x]) => s + x.q * x.p, 0);
+  const p2pOwe = (G.p2p || []).filter((l) => l.role === 'b').reduce((s, l) => s + l.bal, 0);
+  const p2pLent = (G.p2p || []).filter((l) => l.role === 'l').reduce((s, l) => s + l.bal, 0);
+  const stakes = (G.stakes || []).reduce((s, x) => s + (x.value || 0), 0);
   return { value, loans, pl, rent, pay, props: res + com, res, com, vacant, wf, towers, tenants, units, districts: dists.size, assets, stocks,
-    net: G.cash + value - loans - equityOthers - pl + assets + stocks };
+    p2pOwe, p2pLent, stakes,
+    net: G.cash + value - loans - equityOthers - pl + assets + stocks - p2pOwe + p2pLent + stakes };
 }
 
 // ───────── game lifecycle ─────────
@@ -246,7 +255,7 @@ function newGame(mogul, agentId, seed = (Math.random() * 1e9) | 0) {
   CITY = generateCity(seed);
   _eff.clear();
   G = {
-    v: 3, seed, mogul, agentId, month: 0, cash: START_CASH, rep: 0, neg: 0,
+    v: 4, seed, mogul, agentId, month: 0, cash: START_CASH, rep: 0, neg: 0,
     market: { idx: 1, rate: 0.045, phase: rnd() * TAU, g: 0.05 },
     dist: newDistState(),
     lots: {}, zones: {}, coolZ: {},
@@ -264,6 +273,7 @@ function newGame(mogul, agentId, seed = (Math.random() * 1e9) | 0) {
   for (const x of INVESTORS) G.inv[x.id] = { met: !!x.met, trust: x.met ? 35 : 0, paid: 0, deals: 0 };
   for (const s of STOCKS) G.stk[s.id] = { p: s.p, h: [s.p], q: 0, cost: 0 };
   for (const a of ASSETS) G.mkt[a.id] = 1;
+  migrate(G);
   const L = CITY.lots[CITY.startLot];
   const st = G.lots[L.id] = makeOwnedState(L, 0, 0.82);
   st.pp = Math.round(lotValue(L, st)); st.cost = st.pp;
@@ -276,10 +286,11 @@ function loadGame(data) {
   G = data;
   CITY = generateCity(G.seed);
   _eff.clear();
+  migrate(G);
   return G;
 }
 function makeOwnedState(L, price, cond) {
-  const st = { o: 1, pp: price, pm: G.month, cond, ins: false, rm: 1, lux: KINDS[L.kind].lux, ups: {}, units: [], loan: null, cost: price, partners: [], offers: [], auto: true, ver: 0 };
+  const st = { o: 1, pp: price, pm: G.month, cond, ins: false, rm: 1, lux: KINDS[L.kind].lux, ups: {}, units: [], loan: null, cost: price, partners: [], offers: [], auto: true, ver: 0, mode: 'lease', historic: staticHistoric(L) };
   st.units = Array.from({ length: unitCount(L, st) }, () => ({ v: 0 }));
   return st;
 }
@@ -383,6 +394,21 @@ function buy(L, spec) {
     G.inv[spec.partner.id].deals++;
     G.stats.coinvests++;
   }
+  const coop = G.coop[L.id];
+  if (coop && coop.funded) {
+    // friends own the slice of the equity their money paid for (capped so you keep at least 10%)
+    const eq = Math.max(1, cashNeed + partnerCash), out = [];
+    let left = 0.9 - (spec.partner ? spec.partner.share : 0);
+    for (const sh of coop.shares) {
+      const pct = Math.max(0, Math.min(left, sh.amount / eq));
+      left -= pct;
+      st.partners.push({ fid: sh.user, name: sh.name, share: pct, put: sh.amount, deal: coop.deal });
+      out.push({ user: sh.user, pct });
+    }
+    delete G.coop[L.id];
+    G.stats.coop++;
+    G.outbox.push({ k: 'bought', deal: coop.deal, lot: L.id, price, shares: out });
+  }
   G.lots[L.id] = st;
   _eff.delete(L.id);
   if (KINDS[L.kind].cat === 'res') G.stats.boughtRes++; else G.stats.boughtCom++;
@@ -427,6 +453,7 @@ function sell(L, forced = false) {
   if (!forced && gross < 0 && G.cash + gross < 0) return { ok: false, reason: 'The sale won’t cover your loan and you don’t have the cash to make up the difference.' };
   G.cash += gross < 0 ? gross : net;
   for (const p of st.partners || []) {
+    if (p.fid) { G.outbox.push({ k: 'deal', deal: p.deal, user: p.fid, amount: Math.round(Math.max(0, gross) * p.share * 100) / 100, kind: 'exit', lot: L.id }); continue; }
     const inv = G.inv[p.id]; const got = Math.max(0, gross) * p.share;
     inv.paid += got - (p.put || 0);
     inv.trust = clamp(inv.trust + (got > (p.put || 0) ? 10 : -12) * (hasSkill('inv2') ? 1.5 : 1), 0, 100);
@@ -459,6 +486,13 @@ function upgradeAllowed(L, st, id) {
   if (id === 'fittings') return (st.lux ?? K.lux) < 3 && (K.cat === 'res' || K.cat === 'com' || K.cat === 'hosp');
   if (st.ups[id]) return false;
   if (K.pool && id === 'pool') return false;
+  if (!upgradeKindOk(U, E, K)) return false;
+  if (U.minLux && luxOf(E, st) < U.minLux) return false;
+  if (U.req && U.req.some((r) => !st.ups[r])) return false;
+  if (U.rare && (DISTRICT_BY_ID[L.dist].style !== U.style || !rareStock(U.style).ids.includes(id))) return false;
+  return true;
+}
+function upgradeKindOk(U, E, K) {
   if (U.kinds === 'building') return true;
   if (U.kinds === 'resSingle') return K.cat === 'res' && unitCount(E, null) <= 2;
   if (U.kinds === 'resCom') return K.cat === 'res' || K.cat === 'com';
@@ -474,7 +508,7 @@ function upgrade(L, id) {
   G.cash -= c; st.cost += c;
   if (id === 'fittings') st.lux = (st.lux ?? KINDS[kindOf(L)].lux) + 1;
   else st.ups[id] = 1;
-  if (id === 'suite') st.units.push({ v: 0 });
+  if (id === 'suite') st.units.push(st.mode === 'stay' ? { stay: 1 } : { v: 0 });
   bump(st);
   G.stats.upgrades++;
   addXP(6);
@@ -546,6 +580,7 @@ function buildQuote(L, kind, floors, lux, look) {
   if (hasStaff('architect')) cost *= 1 - 0.12 * staffPower('architect');
   if (hasSkill('dev2')) cost *= 0.9;
   if (hasDeg('arch')) cost *= 0.9;
+  if (headTrait('builder')) cost *= 0.92;
   let months = K.f0 ? 4 + floors * 0.55 : (L.w * L.d > 4 ? 9 : 5);
   if (hasStaff('architect')) months *= 0.75;
   months = Math.round(clamp(months, 3, 30));
@@ -568,6 +603,7 @@ function demolish(L) {
   const total = c.demo + c.comp;
   if (total > G.cash) return { ok: false, reason: 'Not enough cash to demolish.' };
   if (G.home === L.id) return { ok: false, reason: 'You live here! Move out first.' };
+  if (st.historic) return { ok: false, reason: 'Heritage-listed buildings can’t be demolished.' };
   G.cash -= total;
   if (!G.zones[L.id]) G.zones[L.id] = zoneOf(L);
   st.cfg = { kind: 'land' }; st.units = []; st.ups = {}; st.lux = 0; st.offers = [];
@@ -602,6 +638,8 @@ function progressBuild(L, st, notes) {
   if (b.left <= 0) {
     st.cfg = { kind: b.kind, floors: b.floors, look: b.look };
     st.lux = b.lux; st.ups = {}; st.cond = 1; st.built = true; st.cost += b.cost;
+    st.yb = curYear(); st.historic = false; st.mode = 'lease';
+    st.bq = clamp(0.48 + b.lux * 0.12 + (hasStaff('architect') ? 0.1 : 0) + (hasSkill('dev3') ? 0.05 : 0) + (hasDeg('arch') ? 0.05 : 0), 0.3, 1);
     st.build = null;
     if (st.loan && st.loan.con) { st.loan.con = false; st.loan.pay = loanPayment(st.loan.bal, st.loan.rate, 360); st.loan.orig = st.loan.bal; if (st.loan.bal < 1) st.loan = null; }
     bump(st);
@@ -693,7 +731,8 @@ function advanceMonth() {
     let propRent = 0;
     const isCom = seg !== 'res';
     st.offers = (st.offers || []).filter((o) => o.exp > G.month);
-    for (let i = 0; i < st.units.length; i++) {
+    if (st.mode === 'stay') propRent = tickStay(L, st);
+    else for (let i = 0; i < st.units.length; i++) {
       const u = st.units[i];
       if (!u || u.home) continue;
       if (u.r) {
@@ -746,10 +785,11 @@ function advanceMonth() {
     if (propRent > 0) pops.push([L.id, propRent]);
     rent += propRent;
     const occupied = st.units.some((u) => u && u.r);
-    let decay = occupied ? 0.0075 : 0.004;
+    let decay = (occupied ? 0.0075 : 0.004) * decayMult(L, st) * (st.mode === 'stay' ? 1.5 : 1);
     if (hasStaff('handy')) { const s = 0.4 * staffPower('handy'); addVal('handy', decay * s * lotValue(L, st) * 0.26); decay *= 1 - s; }
     if (hasSkill('land2')) decay *= 0.7;
     st.cond = Math.max(0.1, st.cond - decay);
+    if (G.month % 12 === 0) checkHeritage(L, st, notes);
     if (st.cond < 0.4) repD -= 0.4; else if (occupied && st.cond > 0.7 && st.rm <= 1.05) repD += 0.1;
     const c = holdCosts(L, st);
     if (hasStaff('handy')) addVal('handy', c.maint / (1 - 0.25 * staffPower('handy')) * 0.25 * staffPower('handy'));
@@ -773,6 +813,7 @@ function advanceMonth() {
       const flow = propRent - c.ins - c.maint - (st.loan && !st.loan.con ? st.loan.pay : 0);
       for (const p of st.partners) {
         const amt = flow * p.share;
+        if (p.fid) { friendPartnerPay(L, p, amt, 'rent'); continue; }
         G.cash -= amt;
         const inv = G.inv[p.id];
         inv.paid += amt;
@@ -803,7 +844,10 @@ function advanceMonth() {
     }
   }
   G.ploans = G.ploans.filter((p) => p.bal > 0);
-  const assetFlow = tickAssets(notes);
+  autoRenovate(notes);
+  const clubDues = tickClubs(notes);
+  const p2pPaid = tickP2P(notes);
+  const assetFlow = tickAssets(notes) - clubDues;
   const divs = tickStocks();
   const taxable = rent - interestPaid - maint - ins - salaries - plInt;
   const taxRate = hasStaff('acct') ? INCOME_TAX - 0.08 * staffPower('acct') : INCOME_TAX;
@@ -820,10 +864,11 @@ function advanceMonth() {
     if (G.neg >= 3) { liquidate(notes); G.neg = 0; }
     else notes.push({ kind: 'disaster', title: 'Account overdrawn', text: `You’re ${fmt$(-G.cash)} in the red. After 3 months the bank will start selling your things.` });
   } else G.neg = 0;
-  repD += buffs().rep * 0.1 + (hasSkill('soc3') ? 1 : 0);
+  repD += buffs().rep * 0.1 + (hasSkill('soc3') ? 1 : 0) + (headTrait('charming') ? 0.3 : 0);
   G.rep = clamp(Math.round((G.rep * 0.985 + clamp(repD, -6, 3.5)) * 10) / 10, -100, 100);
 
   tickBusiness(notes);
+  tickFamily(notes);
   refreshListings();
   for (const r of G.rivals) {
     const def = RIVALS.find((x) => x.id === r.id);
@@ -832,7 +877,7 @@ function advanceMonth() {
   addXP(3);
   record();
   checkAchievements();
-  const month = { rent, mort, ins, maint, tax, salaries, interest, notes, pops, assetFlow, divs };
+  const month = { rent, mort, ins, maint, tax, salaries, interest, notes, pops, assetFlow, divs, clubDues, p2pPaid };
   Bus.emit('month', month);
   return month;
 }
@@ -880,6 +925,10 @@ function statSummary() {
     upgrades: G.stats.upgrades, built: G.stats.built, rezoned: G.stats.rezoned, coinvests: G.stats.coinvests, parties: G.stats.parties,
     staff: Object.keys(G.staff).length, degrees: Object.keys(G.degrees).length,
     boats: G.assets.filter((a) => ASSET_BY_ID[a.id].cat === 'Boats').length, stockGain: G.stats.stockGain, home: G.home != null,
+    historic: owned().filter((L) => lotState(L.id).historic).length,
+    iconic: owned().filter((L) => prestigeOf(L) >= PRESTIGE[4].min).length,
+    str: owned().filter((L) => lotState(L.id).mode === 'stay').length,
+    clubs: Object.keys(G.clubs || {}).length, gen: G.fam ? G.fam.gen : 1, coopDeals: G.stats.coop || 0, p2pLent: G.stats.lent || 0,
   };
 }
 function checkAchievements() {

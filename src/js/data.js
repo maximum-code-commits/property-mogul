@@ -73,6 +73,8 @@ const KINDS = {
   skislope:    { name: 'Ski Run', cat: 'civic', lots: [[4, 4]], top: 150 },
   powerplant:  { name: 'Power Station', cat: 'civic', lots: [[4, 4]], top: 190 },
   golf:        { name: 'Golf Course', cat: 'civic', lots: [[4, 4]], top: 60 },
+  racetrack:   { name: 'Ironvale Raceway', cat: 'civic', lots: [[4, 4]], top: 70 },
+  marina:      { name: 'Yacht Club Marina', cat: 'civic', lots: [[4, 4]], top: 80 },
 };
 const isProperty = (k) => { const c = KINDS[k].cat; return c !== 'civic'; };
 const isBuilding = (k) => { const c = KINDS[k].cat; return c !== 'civic' && c !== 'land'; };
@@ -103,11 +105,11 @@ const DISTRICTS = [
     w: { condotower: 2, apartment: 3, villa: 3, cafe: 2, hotel: 1, townhouse: 2, park: 0.8, plaza: 0.5 } },
   { id: 'lychee', name: 'Lychee', seed: [33, 50], mult: 1.0, growth: 0.046, vol: 0.005, grass: '#93c45c', style: 'suburb',
     blurb: 'Leafy family streets, good schools and Saturday sport.', zones: ['R1', 'R2', 'C1'],
-    dem: { res: 1.08, com: 0.95, hosp: 0.8, ind: 0.6, agri: 0.6 }, pref: { family: 0.1, garage: 0.06, garden: 0.06, Heritage: 0.04 },
+    dem: { res: 1.08, com: 0.95, hosp: 0.8, ind: 0.6, agri: 0.6 }, pref: { family: 0.1, garage: 0.06, garden: 0.06, Heritage: 0.04, historic: 0.06 },
     w: { house: 5, cottage: 4, townhouse: 2, duplex: 2, cornerstore: 1, cafe: 0.7, park: 0.8, apartment: 0.5, land: 0.5 } },
   { id: 'rhodes', name: 'Rhodeshurst', seed: [42, 34], mult: 1.15, growth: 0.05, vol: 0.006, grass: '#8fc259', style: 'suburb',
     blurb: 'Creative riverside lanes full of terraces, studios and brunch spots.', zones: ['R1', 'R2', 'C1'],
-    dem: { res: 1.06, com: 1.05, hosp: 0.9, ind: 0.6, agri: 0.5 }, pref: { Heritage: 0.08, suite: 0.06, fitout: 0.05 },
+    dem: { res: 1.06, com: 1.05, hosp: 0.9, ind: 0.6, agri: 0.5 }, pref: { Heritage: 0.08, suite: 0.06, fitout: 0.05, historic: 0.1 },
     w: { townhouse: 3, apartment: 3, house: 2, cafe: 1.5, cornerstore: 1, office: 1, retail: 1, park: 0.8 } },
   { id: 'rouse', name: 'Rousebrooke', seed: [62, 34], mult: 0.92, growth: 0.042, vol: 0.005, grass: '#98c65e', style: 'suburb',
     blurb: 'Affordable starter homes with big backyards and a sports ground.', zones: ['R1', 'R2', 'C1'],
@@ -119,11 +121,11 @@ const DISTRICTS = [
     w: { warehouse: 4, factory: 4, retail: 1, cornerstore: 1, office: 1, powerplant: 0.6, land: 0.8 } },
   { id: 'maple', name: 'Maple Heights', seed: [34, 66], mult: 1.35, growth: 0.05, vol: 0.006, grass: '#8abf5c', style: 'suburb',
     blurb: 'Old money, autumn maples and very quiet streets.', zones: ['R1'],
-    dem: { res: 1.1, com: 0.85, hosp: 0.8, ind: 0.4, agri: 0.5 }, pref: { luxury: 0.1, pool: 0.06, Classic: 0.06, garden: 0.05 },
+    dem: { res: 1.1, com: 0.85, hosp: 0.8, ind: 0.4, agri: 0.5 }, pref: { luxury: 0.1, pool: 0.06, Classic: 0.06, garden: 0.05, historic: 0.08 },
     w: { villa: 4, mansion: 1.6, house: 3, park: 1.2, cafe: 0.5 } },
   { id: 'kings', name: 'Kingsbridge', seed: [64, 66], mult: 1.1, growth: 0.048, vol: 0.006, grass: '#91c35b', style: 'suburb',
     blurb: 'A busy high street of shops, cafés and terraces by the bridge.', zones: ['R1', 'R2', 'C1', 'C2'],
-    dem: { res: 1.04, com: 1.08, hosp: 0.9, ind: 0.6, agri: 0.5 }, pref: { fitout: 0.06, suite: 0.05, Heritage: 0.05 },
+    dem: { res: 1.04, com: 1.08, hosp: 0.9, ind: 0.6, agri: 0.5 }, pref: { fitout: 0.06, suite: 0.05, Heritage: 0.05, historic: 0.06 },
     w: { townhouse: 3, retail: 2, cafe: 2, cornerstore: 2, house: 2, apartment: 2, mall: 0.6, office: 1 } },
   { id: 'alpine', name: 'Alpine Ridge', seed: [16, 15], mult: 1.2, growth: 0.05, vol: 0.011, grass: '#e9f1f6', style: 'snow',
     blurb: 'A snowy ski village under Mount Frost. Booming in winter, sleepy in summer.', zones: ['R1', 'C1', 'T'],
@@ -151,25 +153,116 @@ const DISTRICT_BY_ID = Object.fromEntries(DISTRICTS.map((d) => [d.id, d]));
 const STREETS_X = ['Kestrel St', 'Wattle Ave', 'Juniper Ln', 'Copper St', 'Bramble Way', 'Lantern St', 'Orchard Ave', 'Marigold Cres', 'Saltbush Rd', 'Pelican Pde', 'Ember St', 'Tinker St', 'Fern Gully Rd', 'Snowgum Way', 'Lakeview Dr', 'Coral Cres', 'Harvest Ln', 'Dockside Rd', 'Pine Ridge Rd', 'Sunset Blvd'];
 const STREETS_Y = ['Grand Blvd', 'Union St', 'Maple Dr', 'Ferry Rd', 'Bellbird Ave', 'Station St', 'Willow Way', 'Market St', 'Clover Rd', 'Regent St', 'Seaview Tce', 'Quarry Rd', 'Chairlift Rd', 'Jetty Rd', 'Windmill Ln', 'Palm Ave', 'Barley St', 'Crane St', 'Summit Rd', 'Lagoon Rd'];
 
-// ── upgrades: cost & effect as a share of property value ──
-// val: value boost, rent: rent boost, tag: what tenants see, vis: visible on the map
+// ── upgrade tree: cost & effect as a share of property value ──
+// branch: where it sits in the tree. req: upgrades needed first. pres: prestige points.
+// val: value boost, rent: rent boost, tag: what tenants see, vis: visible on the map.
+// rare: only offered for a few months at a time, in one region style.
+const HOMES = ['cottage', 'house', 'duplex', 'townhouse', 'villa', 'mansion', 'chalet', 'cabin', 'lakehouse', 'beachvilla'];
+const BIG_HOMES = ['villa', 'mansion', 'lakehouse', 'beachvilla', 'chalet'];
+const MULTI = ['apartment', 'condotower'];
+const COMS = ['office', 'officetower', 'retail', 'mall', 'cafe', 'cornerstore', 'skishop', 'beachbar'];
+const UPGRADE_BRANCHES = [
+  { id: 'space', name: 'Space', icon: 'house' },
+  { id: 'comfort', name: 'Comfort', icon: 'heart' },
+  { id: 'leisure', name: 'Leisure', icon: 'party' },
+  { id: 'tech', name: 'Tech', icon: 'bolt' },
+  { id: 'outdoor', name: 'Outdoors', icon: 'star' },
+  { id: 'business', name: 'Business', icon: 'case' },
+  { id: 'rare', name: 'Rare finds', icon: 'medal' },
+];
 const UPGRADES = {
-  fittings:  { name: 'Premium fittings', desc: 'Raises the fittings one level (kitchen, floors, lighting).', kinds: 'resCom', cost: 0.09, repeat: true, tag: null },
-  extension: { name: 'Extension', desc: 'Adds a bedroom and living space.', kinds: ['cottage', 'house', 'chalet', 'cabin', 'beachvilla'], cost: 0.1, val: 0.11, rent: 0.09, beds: 1, tag: 'large', vis: true },
-  suite:     { name: 'Secondary suite', desc: 'A self-contained granny flat. Adds a rentable unit.', kinds: ['cottage', 'house', 'chalet', 'lakehouse', 'beachvilla', 'villa'], cost: 0.1, val: 0.08, units: 1, tag: 'suite', vis: true },
-  pool:      { name: 'Swimming pool', desc: 'Sparkling backyard pool.', kinds: ['cottage', 'house', 'chalet', 'lakehouse', 'beachvilla', 'duplex'], cost: 0.06, val: 0.07, rent: 0.05, tag: 'pool', vis: true },
-  garage:    { name: 'Double garage', desc: 'Off-street parking and storage.', kinds: ['cottage', 'cabin', 'chalet', 'lakehouse', 'beachvilla', 'villa'], cost: 0.035, val: 0.04, rent: 0.03, tag: 'garage', vis: true },
-  landscaping: { name: 'Landscaped garden', desc: 'Lush gardens. Homes let faster.', kinds: 'resSingle', cost: 0.02, val: 0.03, fill: 0.12, tag: 'garden', vis: true },
-  solar:     { name: 'Solar panels', desc: 'Cuts upkeep costs by 15%.', kinds: 'building', cost: 0.025, val: 0.02, maint: -0.15, tag: 'green', vis: true },
-  dock:      { name: 'Private jetty', desc: 'A jetty for the boat. Waterfront buyers love it.', kinds: ['lakehouse', 'beachvilla', 'villa', 'mansion'], water: true, cost: 0.04, val: 0.06, rent: 0.03, tag: 'dock', vis: true },
-  hottub:    { name: 'Hot tub & fireplace', desc: 'Cozy après-ski comfort.', kinds: ['chalet', 'cabin', 'lakehouse'], cost: 0.03, val: 0.03, rent: 0.06, tag: 'cozy', vis: true },
-  gym:       { name: 'Residents’ gym', desc: 'Gym and lounge for tenants.', kinds: ['apartment', 'condotower', 'office', 'officetower', 'hotel'], cost: 0.03, val: 0.03, rent: 0.04, tag: 'gym' },
-  rooftop:   { name: 'Rooftop garden', desc: 'A green rooftop terrace.', kinds: ['apartment', 'condotower', 'office', 'officetower', 'hotel'], cost: 0.03, val: 0.04, rent: 0.02, tag: 'rooftop', vis: true },
-  fitout:    { name: 'Modern fit-out', desc: 'Move-in-ready commercial interiors.', kinds: ['office', 'officetower', 'retail', 'mall', 'cafe', 'cornerstore', 'skishop', 'beachbar'], cost: 0.05, val: 0.05, rent: 0.06, tag: 'fitout' },
-  spa:       { name: 'Day spa', desc: 'Guests pay more for a spa.', kinds: ['hotel', 'resort', 'skilodge'], cost: 0.05, val: 0.05, rent: 0.07, tag: 'spa' },
-  automation:{ name: 'Automation', desc: 'Robots and smart racking.', kinds: ['warehouse', 'factory', 'containeryard'], cost: 0.05, val: 0.05, rent: 0.07, tag: 'automation' },
-  irrigation:{ name: 'Irrigation', desc: 'Drought-proof crops.', kinds: ['farm', 'field', 'vineyard', 'orchard'], cost: 0.05, val: 0.05, rent: 0.08, tag: 'green', vis: true },
+  extension:   { branch: 'space', name: 'Extension', desc: 'Adds a bedroom and living space.', kinds: ['cottage', 'house', 'chalet', 'cabin', 'beachvilla'], cost: 0.1, val: 0.11, rent: 0.09, pres: 4, beds: 1, tag: 'large', vis: true },
+  suite:       { branch: 'space', name: 'Secondary suite', desc: 'A self-contained granny flat. Adds a rentable unit.', kinds: ['cottage', 'house', 'chalet', 'lakehouse', 'beachvilla', 'villa'], cost: 0.1, val: 0.08, units: 1, pres: 3, tag: 'suite', vis: true },
+  guesthouse:  { branch: 'space', name: 'Guest cottage', desc: 'A pretty cottage for guests at the bottom of the garden.', kinds: BIG_HOMES, req: ['suite'], cost: 0.08, val: 0.07, rent: 0.05, pres: 8, tag: 'guesthouse' },
+  fittings:    { branch: 'comfort', name: 'Premium fittings', desc: 'Raises the fittings one level (kitchen, floors, lighting).', kinds: 'resCom', cost: 0.09, repeat: true, pres: 6 },
+  heatedfloors:{ branch: 'comfort', name: 'Heated floors', desc: 'Toasty toes in every room.', kinds: HOMES.concat(MULTI), minLux: 2, cost: 0.03, val: 0.03, rent: 0.03, pres: 4 },
+  spabath:     { branch: 'comfort', name: 'Spa bathroom', desc: 'Rain shower, freestanding tub, heated towel rails.', kinds: HOMES.concat(MULTI), req: ['heatedfloors'], cost: 0.04, val: 0.04, rent: 0.03, pres: 6, tag: 'spa' },
+  walkin:      { branch: 'comfort', name: 'Walk-in wardrobe', desc: 'A dressing room with a chandelier.', kinds: HOMES, req: ['spabath'], cost: 0.03, val: 0.03, pres: 5 },
+  pool:        { branch: 'leisure', name: 'Swimming pool', desc: 'Sparkling backyard pool.', kinds: ['cottage', 'house', 'chalet', 'lakehouse', 'beachvilla', 'duplex'], cost: 0.06, val: 0.07, rent: 0.05, pres: 6, tag: 'pool', vis: true },
+  hottub:      { branch: 'leisure', name: 'Hot tub & fireplace', desc: 'Cozy evenings, whatever the weather.', kinds: HOMES, cost: 0.03, val: 0.03, rent: 0.05, pres: 4, tag: 'cozy', vis: true },
+  gamesroom:   { branch: 'leisure', name: 'Games room', desc: 'Pool table, pinball and a retro arcade cabinet.', kinds: HOMES.concat(MULTI), cost: 0.025, val: 0.025, rent: 0.03, pres: 4, tag: 'games' },
+  hometheatre: { branch: 'leisure', name: 'Home theatre', desc: 'Velvet recliners and a popcorn machine.', kinds: HOMES, req: ['gamesroom'], cost: 0.035, val: 0.035, rent: 0.03, pres: 6 },
+  bowling:     { branch: 'leisure', name: 'Private bowling lane', desc: 'Because why not.', kinds: ['villa', 'mansion', 'lakehouse'], req: ['hometheatre'], cost: 0.06, val: 0.05, pres: 12 },
+  winecellar:  { branch: 'leisure', name: 'Wine cellar', desc: 'Climate-controlled, with a tasting table.', kinds: HOMES, cost: 0.03, val: 0.03, pres: 5, tag: 'wine' },
+  homegym:     { branch: 'leisure', name: 'Home gym', desc: 'Peloton, mirrors and a smoothie bar.', kinds: HOMES, cost: 0.02, val: 0.02, rent: 0.02, pres: 2, tag: 'gym' },
+  gym:         { branch: 'leisure', name: 'Residents’ gym', desc: 'Gym and lounge for tenants.', kinds: MULTI.concat(['office', 'officetower', 'hotel']), cost: 0.03, val: 0.03, rent: 0.04, pres: 3, tag: 'gym' },
+  solar:       { branch: 'tech', name: 'Solar panels', desc: 'Cuts upkeep costs by 15%.', kinds: 'building', cost: 0.025, val: 0.02, maint: -0.15, pres: 2, tag: 'green', vis: true },
+  battery:     { branch: 'tech', name: 'Home battery', desc: 'Stores the sun. Upkeep another 10% cheaper.', kinds: 'building', req: ['solar'], cost: 0.02, val: 0.015, maint: -0.1, pres: 2, tag: 'green' },
+  smarthome:   { branch: 'tech', name: 'Smart home', desc: 'Voice-controlled lights, locks and blinds.', kinds: HOMES.concat(MULTI), cost: 0.02, val: 0.02, rent: 0.02, pres: 3, tag: 'smart' },
+  robot:       { branch: 'tech', name: 'Robot butler', desc: 'Makes coffee, folds laundry, judges you silently.', kinds: HOMES, req: ['smarthome'], cost: 0.05, val: 0.03, rent: 0.03, pres: 10 },
+  landscaping: { branch: 'outdoor', name: 'Landscaped garden', desc: 'Lush gardens. Homes let faster.', kinds: 'resSingle', cost: 0.02, val: 0.03, fill: 0.12, pres: 3, tag: 'garden', vis: true },
+  outdoorkitchen: { branch: 'outdoor', name: 'Outdoor kitchen', desc: 'Pizza oven, grill and a long table under fairy lights.', kinds: HOMES, req: ['landscaping'], cost: 0.03, val: 0.03, rent: 0.02, pres: 5 },
+  garage:      { branch: 'outdoor', name: 'Double garage', desc: 'Off-street parking and storage.', kinds: ['cottage', 'cabin', 'chalet', 'lakehouse', 'beachvilla', 'villa'], cost: 0.035, val: 0.04, rent: 0.03, pres: 2, tag: 'garage', vis: true },
+  carlift:     { branch: 'outdoor', name: 'Car showroom', desc: 'Glass-walled garage with a turntable. Motor Club members swoon.', kinds: HOMES, req: ['garage'], reqHouse: true, cost: 0.04, val: 0.03, pres: 8, tag: 'showroom' },
+  dock:        { branch: 'outdoor', name: 'Private jetty', desc: 'A jetty for the boat. Waterfront buyers love it.', kinds: ['lakehouse', 'beachvilla', 'villa', 'mansion'], water: true, cost: 0.04, val: 0.06, rent: 0.03, pres: 6, tag: 'dock', vis: true },
+  helipad:     { branch: 'outdoor', name: 'Helipad', desc: 'Skip the traffic.', kinds: ['mansion', 'villa', 'lakehouse', 'condotower', 'officetower', 'hotel'], cost: 0.05, val: 0.04, pres: 14, tag: 'helipad', vis: true },
+  fitout:      { branch: 'business', name: 'Modern fit-out', desc: 'Move-in-ready commercial interiors.', kinds: COMS, cost: 0.05, val: 0.05, rent: 0.06, pres: 3, tag: 'fitout' },
+  signage:     { branch: 'business', name: 'Neon signage', desc: 'A glowing sign people photograph.', kinds: COMS.concat(['hotel']), req: ['fitout'], cost: 0.02, val: 0.02, rent: 0.03, pres: 4 },
+  rooftop:     { branch: 'business', name: 'Rooftop garden', desc: 'A green rooftop terrace.', kinds: MULTI.concat(['office', 'officetower', 'hotel']), cost: 0.03, val: 0.04, rent: 0.02, pres: 4, tag: 'rooftop', vis: true },
+  rooftopbar:  { branch: 'business', name: 'Rooftop bar', desc: 'Cocktails with a view.', kinds: MULTI.concat(['officetower', 'hotel']), req: ['rooftop'], cost: 0.04, val: 0.04, rent: 0.04, pres: 8, tag: 'nightlife' },
+  spa:         { branch: 'business', name: 'Day spa', desc: 'Guests pay more for a spa.', kinds: ['hotel', 'resort', 'skilodge'], cost: 0.05, val: 0.05, rent: 0.07, pres: 6, tag: 'spa' },
+  automation:  { branch: 'business', name: 'Automation', desc: 'Robots and smart racking.', kinds: ['warehouse', 'factory', 'containeryard'], cost: 0.05, val: 0.05, rent: 0.07, pres: 2, tag: 'automation' },
+  irrigation:  { branch: 'business', name: 'Irrigation', desc: 'Drought-proof crops.', kinds: ['farm', 'field', 'vineyard', 'orchard'], cost: 0.05, val: 0.05, rent: 0.08, pres: 2, tag: 'green', vis: true },
+  greenhouse:  { branch: 'business', name: 'Glasshouses', desc: 'Year-round growing.', kinds: ['farm', 'field', 'vineyard', 'orchard'], req: ['irrigation'], cost: 0.05, val: 0.05, rent: 0.06, pres: 3 },
+  // rare finds, one region style each
+  skiroom:     { branch: 'rare', rare: true, style: 'snow', name: 'Heated ski room', desc: 'Boot warmers and a wall of skis.', kinds: HOMES, cost: 0.05, val: 0.06, rent: 0.07, pres: 12, tag: 'ski-in' },
+  stargaze:    { branch: 'rare', rare: true, style: 'snow', name: 'Glass stargazing loft', desc: 'Fall asleep under the aurora.', kinds: HOMES, cost: 0.08, val: 0.08, rent: 0.06, pres: 18, tag: 'unique' },
+  igloospa:    { branch: 'rare', rare: true, style: 'snow', name: 'Igloo spa', desc: 'A heated snow dome with a plunge pool.', kinds: HOMES, cost: 0.07, val: 0.07, rent: 0.07, pres: 16, tag: 'unique', vis: true },
+  infinity:    { branch: 'rare', rare: true, style: 'beach', name: 'Infinity pool', desc: 'It just… keeps going into the ocean.', kinds: HOMES, cost: 0.09, val: 0.1, rent: 0.07, pres: 18, tag: 'pool', vis: true },
+  tikilounge:  { branch: 'rare', rare: true, style: 'beach', name: 'Tiki lounge', desc: 'Thatched bar, hammocks, coconut cups.', kinds: HOMES, cost: 0.05, val: 0.05, rent: 0.06, pres: 12, tag: 'unique', vis: true },
+  surfshack:   { branch: 'rare', rare: true, style: 'beach', name: 'Private surf shack', desc: 'Board racks and an outdoor shower.', kinds: HOMES, cost: 0.04, val: 0.05, rent: 0.05, pres: 10, tag: 'surf' },
+  boathouse:   { branch: 'rare', rare: true, style: 'lake', name: 'Heritage boathouse', desc: 'Timber boathouse with a sundeck.', kinds: HOMES, cost: 0.08, val: 0.09, rent: 0.05, pres: 16, tag: 'dock', vis: true },
+  floatsauna:  { branch: 'rare', rare: true, style: 'lake', name: 'Floating sauna', desc: 'Steam, then jump straight in the lake.', kinds: HOMES, cost: 0.05, val: 0.05, rent: 0.06, pres: 14, tag: 'unique' },
+  lakedeck:    { branch: 'rare', rare: true, style: 'lake', name: 'Sunset lake deck', desc: 'Built for golden hour.', kinds: HOMES, cost: 0.04, val: 0.05, rent: 0.04, pres: 10, tag: 'view' },
+  skydeck:     { branch: 'rare', rare: true, style: 'city', name: 'Sky deck & jacuzzi', desc: 'A glass-floored jacuzzi on the roof.', kinds: MULTI.concat(['officetower', 'hotel']), cost: 0.06, val: 0.07, rent: 0.06, pres: 16, tag: 'view', vis: true },
+  penthouse:   { branch: 'rare', rare: true, style: 'city', name: 'Penthouse conversion', desc: 'Two floors of glass at the very top.', kinds: MULTI.concat(['hotel']), cost: 0.07, val: 0.09, rent: 0.06, pres: 18, tag: 'luxury' },
+  artgallery:  { branch: 'rare', rare: true, style: 'city', name: 'Private art gallery', desc: 'Rotating exhibitions in the lobby.', kinds: MULTI.concat(COMS, ['hotel']), cost: 0.04, val: 0.05, rent: 0.04, pres: 12, tag: 'unique' },
+  treehouse:   { branch: 'rare', rare: true, style: 'suburb', name: 'Luxury treehouse', desc: 'Rope bridge, fairy lights, a tiny library.', kinds: HOMES, cost: 0.04, val: 0.05, rent: 0.04, pres: 12, tag: 'family', vis: true },
+  cinema:      { branch: 'rare', rare: true, style: 'suburb', name: 'Backyard cinema', desc: 'Outdoor screen and beanbags for movie nights.', kinds: HOMES, cost: 0.03, val: 0.04, rent: 0.03, pres: 10, tag: 'unique' },
+  hedgemaze:   { branch: 'rare', rare: true, style: 'suburb', name: 'Hedge maze', desc: 'Hours of getting lost, on purpose.', kinds: ['mansion', 'villa', 'house'], cost: 0.05, val: 0.05, pres: 14, tag: 'garden' },
+  barnloft:    { branch: 'rare', rare: true, style: 'farm', name: 'Barn loft conversion', desc: 'Exposed beams and a rope swing.', kinds: HOMES.concat(['farm']), cost: 0.05, val: 0.07, rent: 0.06, pres: 14, tag: 'unique' },
+  tastingroom: { branch: 'rare', rare: true, style: 'farm', name: 'Tasting cellar', desc: 'Wine and cheese for the weekend crowds.', kinds: ['farm', 'vineyard', 'orchard'].concat(HOMES), cost: 0.05, val: 0.06, rent: 0.07, pres: 12, tag: 'wine' },
+  bathhouse:   { branch: 'rare', rare: true, style: 'farm', name: 'Orchard bathhouse', desc: 'Outdoor tubs among the fruit trees.', kinds: HOMES.concat(['orchard']), cost: 0.05, val: 0.05, rent: 0.05, pres: 12, tag: 'unique' },
+  loft:        { branch: 'rare', rare: true, style: 'industrial', name: 'Warehouse loft', desc: 'Polished concrete and a freight-lift bedroom.', kinds: ['warehouse', 'factory'].concat(HOMES, MULTI), cost: 0.06, val: 0.08, rent: 0.07, pres: 14, tag: 'unique' },
+  mural:       { branch: 'rare', rare: true, style: 'industrial', name: 'Street-art mural', desc: 'A famous artist paints the whole wall.', kinds: 'building', cost: 0.02, val: 0.03, rent: 0.02, pres: 8, tag: 'unique' },
+  speakeasy:   { branch: 'rare', rare: true, style: 'industrial', name: 'Hidden speakeasy', desc: 'Behind the bookshelf. Password required.', kinds: 'building', cost: 0.04, val: 0.04, rent: 0.04, pres: 12, tag: 'nightlife' },
 };
+const RARE_STYLE = { snow: 'snow', beach: 'beach', lake: 'lake', city: 'city', suburb: 'suburb', farm: 'farm', industrial: 'industrial' };
+
+// prestige tiers for buildings; homes at Desirable or above can be holiday-let
+const PRESTIGE = [
+  { min: 0, name: 'Ordinary', color: '#a39a8c' },
+  { min: 30, name: 'Charming', color: '#5aa9d8' },
+  { min: 50, name: 'Desirable', color: '#3e9b4f', str: true },
+  { min: 72, name: 'Luxurious', color: '#a35fd6', str: true },
+  { min: 95, name: 'Iconic', color: '#e7a721', str: true },
+];
+const STR_TIER = { Desirable: { rate: 2.4, occ: 0.55 }, Luxurious: { rate: 3.0, occ: 0.62 }, Iconic: { rate: 3.9, occ: 0.7 } };
+
+// clubs: venues appear on the map and members' vehicles hang out there
+const CLUBS = [
+  { id: 'yacht', name: 'Harbour Yacht Club', venue: 'marina', fee: 60000, dues: 2500, event: 'Regatta', needs: 'a sailboat or yacht', test: () => G.assets.some((a) => ['sail', 'yacht', 'runabout'].includes(a.id)), cats: ['Boats'], buffs: { party: 10, investor: 6, rep: 1 }, color: '#2d5f9a',
+    blurb: 'Sunset regattas, white trousers and the city’s richest dock gossip.' },
+  { id: 'car', name: 'Centropolis Motor Club', venue: 'racetrack', fee: 40000, dues: 1500, event: 'Track day', needs: 'a convertible, classic or supercar', test: () => G.assets.some((a) => ['convert', 'classic', 'super'].includes(a.id)), cats: ['Cars'], buffs: { party: 5, rep: 1, fun: 4 }, color: '#d64b3c',
+    blurb: 'Track days at Ironvale Raceway. Bring your fastest car.' },
+  { id: 'ski', name: 'Mount Frost Ski Club', venue: 'skislope', fee: 25000, dues: 900, event: 'Downhill race', needs: 'ski gear or a home in Alpine Ridge', test: () => G.assets.some((a) => a.id === 'skis') || owned().some((L) => L.dist === 'alpine'), cats: ['Fun'], buffs: { fun: 6, party: 4, investor: 3 }, color: '#5aa9d8',
+    blurb: 'First chairlift of the morning and fondue at the lodge.' },
+  { id: 'golf', name: 'Lake Serene Golf Club', venue: 'golf', fee: 80000, dues: 3000, event: 'Members’ Cup', needs: 'a reputation of 20', test: () => G.rep >= 20, cats: [], buffs: { investor: 12, rep: 1 }, color: '#3e9b4f',
+    blurb: 'Where the big deals actually get done. Usually on the 9th hole.' },
+];
+const CLUB_BY_ID = Object.fromEntries(CLUBS.map((c) => [c.id, c]));
+
+// family
+const TRAITS = [
+  { id: 'thrifty', name: 'Thrifty', desc: 'Upkeep 8% cheaper.' },
+  { id: 'charming', name: 'Charming', desc: '+0.3 reputation every month.' },
+  { id: 'shark', name: 'Shark', desc: 'Sellers concede more in negotiations.' },
+  { id: 'builder', name: 'Builder', desc: 'Construction 8% cheaper.' },
+  { id: 'host', name: 'Born host', desc: 'Parties 20% more effective.' },
+  { id: 'scholar', name: 'Scholar', desc: 'Degrees take 25% less time.' },
+  { id: 'lucky', name: 'Lucky', desc: '30% fewer building issues.' },
+];
+const TRAIT_BY_ID = Object.fromEntries(TRAITS.map((t) => [t.id, t]));
 
 const LENDERS = [
   { id: 'centro', name: 'Centro Savings Bank', margin: 0.012, minDep: 0.2, minRep: -20, color: '#2f7d6d', blurb: 'Steady rates for steady hands.' },
@@ -319,6 +412,7 @@ const ASSETS = [
   { id: 'foodtruck', name: 'Taco Truck', cat: 'Businesses', price: 85000, drift: -0.08, vol: 0.03, upkeep: 0.02, income: 0.22, buffs: { fun: 2 }, rarity: 'common', art: 'truck', color: '#e07a3a' },
   { id: 'racehorse', name: 'Racehorse "Lucky Deed"', cat: 'Businesses', price: 520000, drift: -0.04, vol: 0.2, upkeep: 0.06, income: 0.1, buffs: { party: 4, rep: 1, fun: 4 }, rarity: 'epic', art: 'horse', color: '#8a5a3c' },
   { id: 'coffee', name: 'Coffee Plantation', cat: 'Businesses', price: 3200000, drift: 0.02, vol: 0.06, upkeep: 0.01, income: 0.075, buffs: { investor: 3 }, rarity: 'epic', art: 'plantation', color: '#6b4424' },
+  { id: 'skis', name: 'Pro Ski Kit', cat: 'Fun', price: 4500, drift: -0.15, vol: 0.02, upkeep: 0.05, buffs: { fun: 2 }, rarity: 'common', art: 'skis', color: '#5aa9d8' },
   { id: 'island', name: 'Tiny Private Island', cat: 'Fun', price: 9000000, drift: 0.035, vol: 0.04, upkeep: 0.015, buffs: { party: 25, investor: 12, rep: 3, fun: 8 }, rarity: 'legendary', art: 'island', color: '#7fcf6a' },
 ];
 const ASSET_BY_ID = Object.fromEntries(ASSETS.map((a) => [a.id, a]));
@@ -367,6 +461,14 @@ const ACHIEVEMENTS = [
   { id: 'sky', name: 'Sky High', desc: 'Own a tower or hotel', medal: 'gold', ribbon: ['#3a4f7a', '#aab9da'], test: (s) => s.towers >= 1 },
   { id: 'everywhere', name: 'Postcode Collector', desc: 'Own property in 8 different suburbs', medal: 'gold', ribbon: ['#d64b3c', '#3d78c2'], test: (s) => s.districts >= 8 },
   { id: 'home', name: 'Home Sweet Home', desc: 'Move into a home of your own', medal: 'bronze', ribbon: ['#e86a8a', '#fff1f4'], test: (s) => s.home },
+  { id: 'historic', name: 'Living History', desc: 'Own a heritage-listed building', medal: 'bronze', ribbon: ['#8a5a3c', '#f3d39b'], test: (s) => s.historic >= 1 },
+  { id: 'iconic', name: 'Icon', desc: 'Own an Iconic-prestige property', medal: 'gold', ribbon: ['#e7a721', '#fff3b8'], test: (s) => s.iconic >= 1 },
+  { id: 'str', name: 'Superhost', desc: 'Run a holiday rental', medal: 'silver', ribbon: ['#e86a8a', '#ffffff'], test: (s) => s.str >= 1 },
+  { id: 'club', name: 'Members Only', desc: 'Join a club', medal: 'blue', ribbon: ['#2d5f9a', '#ffd34d'], test: (s) => s.clubs >= 1 },
+  { id: 'heir', name: 'The Next Generation', desc: 'Pass the empire to an heir', medal: 'silver', ribbon: ['#6b3f8f', '#ffffff'], test: (s) => s.gen >= 2 },
+  { id: 'dynasty', name: 'Dynasty', desc: 'Reach the third generation', medal: 'gold', ribbon: ['#6b3f8f', '#ffd34d'], test: (s) => s.gen >= 3 },
+  { id: 'coop', name: 'Friends with Benefits', desc: 'Buy a property with friends', medal: 'green', ribbon: ['#3d78c2', '#ffd34d'], test: (s) => s.coopDeals >= 1 },
+  { id: 'banker', name: 'Bank of Me', desc: 'Lend money to another player', medal: 'green', ribbon: ['#2f7d6d', '#ffffff'], test: (s) => s.p2pLent >= 1 },
   { id: 'decade', name: 'Time in the Market', desc: 'Play for 10 years', medal: 'bronze', ribbon: ['#8a8f99', '#d9dde3'], test: (s) => s.months >= 120 },
 ];
 

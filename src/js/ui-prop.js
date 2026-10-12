@@ -112,6 +112,11 @@ const PV = {
     rows.push(['Suburb', d.name]);
     if (isProperty(L.kind)) {
       rows.push(['Zoning', `${zoneOf(L)} · ${ZONES[zoneOf(L)].name}`]);
+      if (isBuilding(E.kind)) {
+        rows.push(['Built', `${builtYear(L, st)} · ${ageOf(L, st)} years old${isHistoric(L, st) ? ' · <span class="tag">Heritage</span>' : ''}`]);
+        rows.push(['Build quality', qualityLabel(qualityOf(L, st))]);
+        if (K.yield) { const pr = prestigeOf(L, st), tier = prestigeTier(pr); rows.push(['Prestige', `<span style="color:${tier.color}">\u25c6</span> ${tier.name} (${pr})`]); }
+      }
       rows.push(['Market value', fmt$(lotValue(L, st))]);
       if (K.yield) {
         const n = unitCount(E, st);
@@ -194,7 +199,14 @@ const PV = {
       acts = (cool ? '' : btn('nego', lst ? 'Make an Offer' : 'Approach the Owner', { cls: 'btn-go' })) +
         (lst ? btn('payask', `Pay Asking Price <small>${fmtShort(N.list)}</small>`) : '') +
         (!N.inspected ? btn('inspect', `Inspect <small>${fmtShort(Math.max(1500, N.list * 0.0025))}</small>`) : '') +
+        (Net.on && !G.coop[L.id] && !Net.lead.some((d) => d.lot === L.id && d.seed === G.seed) ? btn('coop', 'Go In With Friends') : '') +
+        (Net.on ? btn('watch', Net.watching(L.id) ? 'Watching ★' : 'Watch') : '') +
         btn('plan', this.showPlan ? 'Hide Floorplan' : 'Floorplan') + btn('close', 'Back');
+      const cp = G.coop[L.id];
+      if (cp && cp.funded) body += `<p class="hint">${icon('handshake', 'inl')} Your friends put <b>${fmt$(cp.shares.reduce((s, x) => s + x.amount, 0))}</b> into this one. Buy it and they own their share.</p>`;
+      else if (Net.lead.some((d) => d.lot === L.id && d.seed === G.seed && d.status === 'open')) body += `<p class="hint">${icon('handshake', 'inl')} You’re raising money from friends for this property. Close funding in Online › Co-op Deals.</p>`;
+      const fw = Net.friendsWatch.get(L.id);
+      if (fw) body += `<p class="hint">${icon('star', 'inl')} ${esc(fw.map((w) => w.name).join(', '))} ${fw.length > 1 ? 'are' : 'is'} watching this property.</p>`;
     } else if (this.step === 'nego') {
       head = N.done ? (N.price ? 'Deal agreed!' : 'They walked away.') : 'Let’s negotiate.';
       const hearts = Array.from({ length: Math.max(0, N.pat) }, () => icon('heart', 'heart')).join('');
@@ -251,6 +263,8 @@ const PV = {
       ${P_.partner ? `<div><dt>Investor puts in</dt><dd class="up">−${fmt$(partnerCash)}</dd></div>` : ''}
       ${q ? `<div><dt>Loan</dt><dd>${fmt$(q.principal)} at ${fmtPct(q.rate, 2)}</dd></div><div><dt>Repayments</dt><dd>${fmt$(q.pay)}/mo</dd></div><div><dt>Expected rent</dt><dd>${fmt$(q.rent)}/mo</dd></div><div><dt>Monthly cash flow</dt><dd class="${q.flow >= 0 ? 'up' : 'down'}">${q.flow >= 0 ? '+' : ''}${fmt$(q.flow * (1 - (P_.partner ? P_.share : 0)))}</dd></div>` : ''}
       <div><dt>Your cash needed today</dt><dd>${fmt$(cashNeed)}</dd></div></dl>`;
+    const cp = G.coop[L.id];
+    if (cp && cp.funded) body += `<p class="hint">${icon('handshake', 'inl')} Co-op: ${cp.shares.map((s) => `${esc(s.name)} ${fmtShort(s.amount)}`).join(', ')}. Their money is already in your cash; they’ll own the share of this property it pays for.</p>`;
     if (!ok) body += `<p class="warn">${esc(reason)}</p>`;
     const acts = btn('buy', 'Buy It', { cls: 'btn-go', dis: !ok }) + btn('close', 'Not Now');
     return { head, body, acts };
@@ -291,7 +305,8 @@ const PV = {
     }
     if (home) body += `<p class="hint">${icon('heart', 'inl')} You live here${n > 1 ? `, and rent out ${n - 1} more unit${n > 2 ? 's' : ''}` : ''}.</p>`;
     else body += `<p>${n > 1 ? `<b>${occ} of ${n}</b> units let.` : occ ? `Tenanted by <b>${esc(st.units[0].n)}</b> at <b>${fmt$(st.units[0].r)}/mo</b>, ${st.units[0].l} months left.` : `<span class="down">Vacant</span> for ${st.units[0]?.v || 0} month${st.units[0]?.v === 1 ? '' : 's'}.`}</p>`;
-    if (!(home && n === 1)) {
+    if (st.mode === 'stay') body += this.stayBox(L, st);
+    if (!(home && n === 1) && st.mode !== 'stay') {
       const o = rentOutlook(L, st, st.rm);
       const best = bestRent(L, st);
       body += `<div class="rentbox">
@@ -319,8 +334,11 @@ const PV = {
         ${partnerShare(st) ? `<div><dt>Investor share</dt><dd>${Math.round(partnerShare(st) * 100)}%</dd></div>` : ''}
         <div><dt>Your monthly cash flow</dt><dd class="${flow >= 0 ? 'up' : 'down'}">${flow >= 0 ? '+' : ''}${fmt$(flow)}</dd></div>
       </dl>`;
+    body += this.lifeBox(L, st);
     const rc = renovateCost(L, st);
     let acts = btn('renovate', `Renovate <small>${fmtShort(rc)}</small>`, { dis: st.cond > 0.95 || rc > G.cash });
+    if (st.mode !== 'stay' && canStay(L, st)) acts += btn('stay', 'Turn Into a Holiday Let', { cls: 'btn-go' });
+    if (st.mode === 'stay') acts += btn('unstay', 'Back to Long-Term Lease');
     if (canLiveIn(L) && !home) acts += btn('movein', `Make This My Home${moveInCost(L) ? ` <small>${fmtShort(moveInCost(L))} to break lease</small>` : ''}`);
     if (home) acts += btn('moveout', 'Move Out');
     if (st.loan) acts += btn('payoff', `Pay Off Loan <small>${fmtShort(st.loan.bal)}</small>`, { dis: st.loan.bal > G.cash });
@@ -350,10 +368,39 @@ const PV = {
     if (st.units.length > 60) h += `<p class="hint">Showing 60 of ${st.units.length} units.</p>`;
     return h;
   },
+  lifeBox(L, st) {
+    const E = eff(L), age = ageOf(L, st), q = qualityOf(L, st), pr = prestigeOf(L, st), tier = prestigeTier(pr), nt = nextTier(pr);
+    const autoOn = st.autoReno != null ? st.autoReno : G.autoReno.on;
+    let heritage;
+    if (st.historic) heritage = `${icon('medal', 'inl')} <b>Heritage listed.</b> Worth 12% more, wears slower, can’t be demolished.`;
+    else if (q >= 0.68) heritage = age >= 75 ? 'Keep it above 55% condition and it will be heritage listed at the next review.' : `Solidly built. It can be heritage listed in <b>${75 - age} years</b> if it’s kept in good condition.`;
+    else heritage = 'Not built well enough to become a heritage building. Older homes like this wear out faster.';
+    return `<div class="lifebox">
+      <div class="lb-row"><span class="ctl-l">Age</span><span class="ctl-v">Built ${builtYear(L, st)} · ${age} years · ${qualityLabel(q)} build · wears ${decayMult(L, st).toFixed(1)}× normal</span></div>
+      <p class="hint">${heritage}</p>
+      <div class="lb-row"><span class="ctl-l">Prestige</span><div class="meter"><i style="width:${Math.min(100, pr)}%;background:${tier.color}"></i></div><span class="ctl-v" style="color:${tier.color}">${tier.name} ${pr}</span></div>
+      <p class="hint">${nt ? `${nt.min - pr} more to reach <b>${nt.name}</b>${nt.str && !tier.str ? ', which unlocks holiday letting' : ''}. Upgrades, fittings, heritage status and condition all add prestige.` : 'Top tier. This is one of the most famous addresses on the island.'}</p>
+      <div class="ctl"><span class="ctl-l">Auto-renovate</span><button class="toggle ${autoOn ? 'on' : ''}" data-act="autoreno" aria-pressed="${autoOn}" aria-label="Auto-renovate"><i></i></button><span class="ctl-v">${autoOn ? `When condition drops below ${Math.round(G.autoReno.at * 100)}%` : 'Off'}${st.autoReno == null ? ' (game default)' : ''}</span></div>
+    </div>`;
+  },
+  stayBox(L, st) {
+    const q = stayQuote(L, st), last = st.stay && st.stay.last, rating = st.stay ? st.stay.rating : 4.5;
+    const stars = '★'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating));
+    const longTerm = marketRent(L, Object.assign({}, st, { mode: 'lease' }));
+    return `<div class="staybox">
+      <div class="rb-head"><span>Holiday let · ${q.tier.name}</span><b>${fmt$(q.nightly)}/night</b><span class="stars" title="${rating.toFixed(1)} stars">${stars} ${rating.toFixed(1)}</span></div>
+      <div class="odds">
+        <div><b>${Math.round(q.occ * 100)}%</b><span>expected occupancy this season</span></div>
+        <div><b>${fmtShort(q.net)}</b><span>expected per month after cleaning & fees</span></div>
+        <div><b>${fmtShort(longTerm)}</b><span>a long-term tenant would pay</span></div>
+        <div><b>${st.stay ? st.stay.reviews : 0}</b><span>guest stays so far</span></div>
+      </div>
+      ${last ? `<div class="weeks">${[0, 1, 2, 3].map((i) => `<div class="wk ${i < last.weeks ? 'on' : ''}"><small>Week ${i + 1}</small><b>${i < last.weeks ? esc(last.guests[i]) : 'Empty'}</b></div>`).join('')}</div><p class="hint">Last month: ${last.weeks} week-long booking${last.weeks === 1 ? '' : 's'}, ${fmt$(last.net)} after cleaning and platform fees. Guests wear the place 50% faster.</p>` : '<p class="hint">Your first guests arrive next month.</p>'}
+    </div>`;
+  },
   ownUpgrades(L, st) {
-    const E = eff(L), K = KINDS[E.kind];
-    const ids = Object.keys(UPGRADES).filter((id) => upgradeAllowed(L, st, id) || st.ups[id]);
-    if (!ids.length) return '<p>No upgrades available for this property.</p>';
+    const E = eff(L), K = KINDS[E.kind], style = DISTRICT_BY_ID[L.dist].style;
+    const stock = rareStock(style);
     const gainOf = (id) => {
       const before = lotValue(L, st), rb = marketRent(L, st);
       if (id === 'fittings') { st.lux = luxOf(E, st) + 1; } else st.ups[id] = 1;
@@ -361,14 +408,42 @@ const PV = {
       if (id === 'fittings') st.lux--; else delete st.ups[id];
       return [after - before, ra - rb];
     };
-    return `<p class="hint">Fittings: <b>${LUX[luxOf(E, st)]}</b> — ${LUX_FIT[luxOf(E, st)]}.</p><div class="upgrades">${ids.map((id) => {
-      const U = UPGRADES[id], have = !!st.ups[id];
-      if (have) return `<div class="upg have"><b>${icon('check', 'inl')} ${U.name}</b><span>${U.desc}</span>${U.tag ? chip(U.tag) : ''}</div>`;
-      const c = upgradeCost(L, st, id), [dv, dr] = gainOf(id);
-      return `<div class="upg"><b>${U.name}${id === 'fittings' ? ` → ${LUX[luxOf(E, st) + 1]}` : ''}</b><span>${U.desc}</span>
-        <div class="upg-fx"><span class="${dv >= c ? 'up' : ''}">+${fmtShort(dv)} value</span>${dr > 1 ? `<span class="up">+${fmtShort(dr)}/mo rent</span>` : ''}${U.tag ? tagChip(L, U.tag) : ''}${U.vis ? '<span class="muted">Visible on the map</span>' : ''}</div>
-        <button class="btn btn-sm" data-act="upgrade" data-v="${id}" ${c > G.cash ? 'disabled' : ''}>Add <small>${fmtShort(c)}</small></button></div>`;
-    }).join('')}</div>`;
+    const relevant = (id) => {
+      const U = UPGRADES[id];
+      if (U.rare) return U.style === style && upgradeKindOk(U, E, K);
+      if (U.water && !L.water) return false;
+      if (id === 'fittings') return K.cat === 'res' || K.cat === 'com' || K.cat === 'hosp';
+      if (K.pool && id === 'pool') return false;
+      return upgradeKindOk(U, E, K);
+    };
+    const pr = prestigeOf(L, st), tier = prestigeTier(pr);
+    let html = `<p class="hint">Fittings: <b>${LUX[luxOf(E, st)]}</b> — ${LUX_FIT[luxOf(E, st)]}. Prestige: <b style="color:${tier.color}">${tier.name} ${pr}</b>.</p><div class="utree">`;
+    for (const B of UPGRADE_BRANCHES) {
+      const ids = Object.keys(UPGRADES).filter((id) => UPGRADES[id].branch === B.id && relevant(id));
+      if (!ids.length) continue;
+      html += `<div class="ubranch"><h3>${icon(B.icon, 'inl')} ${B.name}${B.id === 'rare' ? ` <small>${stock.ids.filter((x) => ids.includes(x)).length ? `new stock in ${stock.leaves} mo` : ''}</small>` : ''}</h3>`;
+      for (const id of ids) {
+        const U = UPGRADES[id], have = !!st.ups[id];
+        if (have) { html += `<div class="unode got"><b>${icon('check', 'inl')} ${U.name}</b><span>+${U.pres || 0} prestige${U.tag ? ' · ' + U.tag : ''}</span></div>`; continue; }
+        const ok = upgradeAllowed(L, st, id);
+        let why = '';
+        if (!ok) {
+          if (id === 'fittings') why = 'Already at the top level.';
+          else if (U.req && U.req.some((r) => !st.ups[r])) why = 'Needs ' + U.req.filter((r) => !st.ups[r]).map((r) => UPGRADES[r].name).join(', ');
+          else if (U.minLux && luxOf(E, st) < U.minLux) why = `Needs ${LUX[U.minLux]} fittings`;
+          else if (U.rare && !stock.ids.includes(id)) why = 'Not offered this season. Check back later.';
+          else why = 'Not available here.';
+          html += `<div class="unode locked"><b>${icon('lock', 'inl')} ${U.name}</b><span>${esc(why)}</span></div>`;
+          continue;
+        }
+        const c = upgradeCost(L, st, id), [dv, dr] = gainOf(id);
+        html += `<div class="unode can ${U.rare ? 'rare' : ''}"><b>${U.name}${id === 'fittings' ? ` → ${LUX[luxOf(E, st) + 1]}` : ''}</b><span>${esc(U.desc)}</span>
+          <div class="upg-fx"><span class="${dv >= c ? 'up' : ''}">+${fmtShort(dv)} value</span>${dr > 1 ? `<span class="up">+${fmtShort(dr)}/mo</span>` : ''}<span>+${U.pres || 0} prestige</span>${U.tag ? tagChip(L, U.tag) : ''}${U.vis ? '<span class="muted">on map</span>' : ''}</div>
+          <button class="btn btn-sm ${U.rare ? 'btn-go' : ''}" data-act="upgrade" data-v="${id}" ${c > G.cash ? 'disabled' : ''}>Add <small>${fmtShort(c)}</small></button></div>`;
+      }
+      html += '</div>';
+    }
+    return html + '</div>';
   },
   ownPlan(L, st) {
     const E = eff(L), K = KINDS[E.kind];
@@ -383,9 +458,9 @@ const PV = {
     </dl><p class="hint">${LUX_FIT[luxOf(E, st)]}.</p>`;
   },
   ownPartners(L, st) {
-    if (!st.partners || !st.partners.length) return '<p>You own 100% of this property. You can bring in investors when you buy.</p>';
+    if (!st.partners || !st.partners.length) return '<p>You own 100% of this property. You can bring in investors, or go in on it with friends online, when you buy.</p>';
     const eq = Math.max(0, lotValue(L, st) - (st.loan ? st.loan.bal : 0));
-    return `<div class="partners">${st.partners.map((p, i) => { const X = INVESTOR_BY_ID[p.id]; return `<div class="partner-row"><i>${charSVG(X.look, 'face')}</i><div><b>${esc(X.name)}</b><span>${Math.round(p.share * 100)}% share · put in ${fmt$(p.put || 0)} · worth ${fmt$(eq * p.share)} today</span></div><button class="btn btn-sm" data-act="buyout" data-v="${i}">Buy out <small>${fmtShort(eq * p.share * 1.03)}</small></button></div>`; }).join('')}</div>`;
+    return `<div class="partners">${st.partners.map((p, i) => { const X = p.fid ? { name: `${p.name} (friend)`, look: lookFor('friend', p.fid) } : INVESTOR_BY_ID[p.id]; return `<div class="partner-row"><i>${charSVG(X.look, 'face')}</i><div><b>${esc(X.name)}</b><span>${p.fid ? 'Co-op deal · ' : ''}${Math.round(p.share * 100)}% share · put in ${fmt$(p.put || 0)} · worth ${fmt$(eq * p.share)} today</span></div><button class="btn btn-sm" data-act="buyout" data-v="${i}">Buy out <small>${fmtShort(eq * p.share * 1.03)}</small></button></div>`; }).join('')}</div>`;
   },
   saleView(L, st, btn) {
     const q = sellQuote(L);
@@ -563,6 +638,8 @@ const PV = {
       case 'sweet': negoSweetener(this.N, v); Sound.play('tab'); break;
       case 'discount': negoDiscount(this.N); Sound.play('coin'); break;
       case 'topay': this.toPay(); break;
+      case 'coop': Modal.close(); Social.open('deals', { draft: { L, price: Math.round(this.N.list || lotValue(L)), target: Math.round((this.N.list || lotValue(L)) * 0.3 / 1000) * 1000, minPut: 0, note: '' } }); return;
+      case 'watch': Net.toggleWatch(L).then((on) => { Sound.play(on ? 'coin' : 'tab'); if (Modal.view === this) this.render(); }).catch((e) => { this.msg = e.message; this.render(); }); return;
       case 'method': this.pay.method = v; Sound.play('tab'); break;
       case 'years': this.pay.years = +v; Sound.play('tab'); break;
       case 'partner': this.pay.partner = this.pay.partner === v ? null : v; this.pay.share = 0.25; Sound.play('tab'); break;
@@ -575,6 +652,9 @@ const PV = {
       case 'manage': this.mode = 'own'; this.tab = 'overview'; break;
       case 'tab': this.tab = v; this.sale = null; this.demo = false; Sound.play('tab'); break;
       case 'best': st.rm = bestRent(L, st); Sound.play('tab'); Game.saveSoon(); break;
+      case 'autoreno': { const cur = st.autoReno != null ? st.autoReno : G.autoReno.on; st.autoReno = !cur; Sound.play('tab'); break; }
+      case 'stay': { const r = setStay(L, true); if (!r.ok) fail(r); else { Sound.play('buy'); floatText(L, 'Now taking bookings!', '#e6d0ff'); UI.afterChange(); } break; }
+      case 'unstay': setStay(L, false); Sound.play('tab'); UI.afterChange(); break;
       case 'ins': st.ins = !st.ins; Sound.play('tab'); break;
       case 'auto': st.auto = !st.auto; Sound.play('tab'); break;
       case 'accept': if (acceptOffer(L, +v)) { Sound.play('coin'); UI.afterChange(); } break;

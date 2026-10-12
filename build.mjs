@@ -2,7 +2,7 @@
 //   dist/property-mogul.html  standalone page (double-click to play)
 //   dist/artifact.html        page body for publishing as a claude.ai artifact
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-const order = ['util', 'data', 'mapgen', 'art', 'sim', 'biz', 'render', 'audio', 'ui-core', 'ui-prop', 'ui-panels', 'main'];
+const order = ['util', 'data', 'mapgen', 'art', 'sim', 'biz', 'life', 'render', 'audio', 'ui-core', 'ui-prop', 'ui-panels', 'net', 'ui-social', 'main'];
 const js = order.map((f) => `// ── ${f}.js ──\n` + readFileSync(`src/js/${f}.js`, 'utf8').replace(/^'use strict';\n/, '')).join('\n');
 const css = readFileSync('src/style.css', 'utf8');
 const body = readFileSync('src/index.html', 'utf8')

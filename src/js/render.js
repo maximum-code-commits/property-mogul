@@ -74,6 +74,8 @@ function resetWorldCaches() {
   View.pages.clear(); View.pageOrder = [];
   View.spr.clear(); View.sprPrev = null; View.topZ.clear(); View.smokeOf.clear();
   View.cars = []; View.peds = []; View.boats = []; View.parts = []; View.puffs = [];
+  View.venues = {};
+  for (const [club, kind] of [['car', 'racetrack'], ['yacht', 'marina'], ['ski', 'skislope'], ['golf', 'golf']]) View.venues[club] = CITY.lots.find((l) => l.kind === kind) || null;
   spawnTraffic();
 }
 
@@ -447,7 +449,7 @@ function pinSprite(type, dpr) {
   const g = c.getContext('2d');
   g.scale(dpr, dpr);
   const cx = W / 2, cy = 16;
-  const ring = type === 'sale' ? ['#fff3b8', '#e7a721', '#a8640e'] : type === 'offer' || type === 'build' ? ['#d9f2ff', '#3d8fc2', '#215a82'] : type === 'home' ? ['#ffe0ea', '#e86a8a', '#a83a5a'] : ['#ffe2c2', '#f08a24', '#a8500e'];
+  const ring = type === 'sale' ? ['#fff3b8', '#e7a721', '#a8640e'] : type === 'offer' || type === 'build' ? ['#d9f2ff', '#3d8fc2', '#215a82'] : type === 'home' ? ['#ffe0ea', '#e86a8a', '#a83a5a'] : type === 'stay' ? ['#f1e2ff', '#a35fd6', '#6b3f8f'] : type === 'watch' ? ['#d8fff4', '#2bb39a', '#17695a'] : ['#ffe2c2', '#f08a24', '#a8500e'];
   g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.ellipse(cx, H - 3, 6, 2.4, 0, 0, TAU); g.fill();
   g.fillStyle = ring[2]; g.beginPath(); g.moveTo(cx - 6, cy + 9); g.lineTo(cx, H - 6); g.lineTo(cx + 6, cy + 9); g.fill();
   const grd = g.createRadialGradient(cx - 4, cy - 5, 2, cx, cy, R + 2);
@@ -461,6 +463,11 @@ function pinSprite(type, dpr) {
     g.closePath(); g.fillStyle = '#e7a721'; g.fill(); g.strokeStyle = '#a8640e'; g.lineWidth = 1; g.stroke();
   } else if (type === 'build') {
     g.fillRect(cx - 1, cy - 7, 2, 13); g.fillRect(cx - 7, cy - 7, 13, 2); g.fillRect(cx + 4, cy - 5, 1.2, 6); g.fillRect(cx - 4, cy + 4, 8, 2);
+  } else if (type === 'stay') {
+    g.fillRect(cx - 6, cy - 3, 12, 9); g.fillStyle = '#fffdf5'; g.fillRect(cx - 4.5, cy - 1.5, 9, 6); g.fillStyle = ring[2]; g.fillRect(cx - 3, cy - 6, 6, 3); g.fillStyle = '#fffdf5'; g.fillRect(cx - 1.6, cy - 4.8, 3.2, 1.8);
+  } else if (type === 'watch') {
+    g.beginPath(); g.moveTo(cx - 8, cy); g.quadraticCurveTo(cx, cy - 8, cx + 8, cy); g.quadraticCurveTo(cx, cy + 8, cx - 8, cy); g.fill();
+    g.fillStyle = '#fffdf5'; g.beginPath(); g.arc(cx, cy, 3, 0, TAU); g.fill(); g.fillStyle = ring[2]; g.beginPath(); g.arc(cx, cy, 1.6, 0, TAU); g.fill();
   } else if (type === 'home') {
     g.beginPath(); g.moveTo(cx, cy + 6); g.bezierCurveTo(cx - 9, cy - 1, cx - 5, cy - 8, cx, cy - 3); g.bezierCurveTo(cx + 5, cy - 8, cx + 9, cy - 1, cx, cy + 6); g.fill();
   } else {
@@ -472,11 +479,11 @@ function pinSprite(type, dpr) {
   return s;
 }
 function pinType(L, st) {
-  if (!st) return null;
-  if (st.s) return 'sale';
-  if (!st.o) return null;
+  if (st && st.s) return 'sale';
+  if (!st || !st.o) return typeof Net !== 'undefined' && Net.on && (Net.watching(L.id) || Net.friendsWatch.has(L.id)) ? 'watch' : null;
   if (G.home === L.id) return 'home';
   if (st.build) return 'build';
+  if (st.mode === 'stay') return 'stay';
   if (st.offers && st.offers.length && !st.auto) return 'offer';
   if (st.units && st.units.some((u) => u && !u.r && !u.home)) return 'vacant';
   return 'own';
@@ -580,6 +587,7 @@ function drawFrame(dt) {
     if (ox - bx.ax > vx1 || ox - bx.ax + bx.w < vx0 || oy - bx.ay > vy1 || oy - bx.ay + bx.h < vy0) continue;
     const s = getSprite(E, B, budget);
     ctx.drawImage(s.c, ox - s.ax, oy - s.ay, s.w, s.h);
+    if (View.venues && G) for (const club in View.venues) if (View.venues[club] === L) drawVenue(ctx, L, club, B, c.z);
     if (s.smoke && s.smoke.length) smokers.push([L, s.smoke]);
     if (isProperty(L.kind) && G && (View.showPins || L.id === View.sel)) {
       const st = G.lots[L.id];
@@ -647,6 +655,60 @@ function drawFrame(dt) {
   if (View.plane) drawPlane(ctx, View.plane, c.z);
   const ca = clamp((0.95 - c.z) * 1.4, 0, 0.55);
   if (ca > 0.02) for (const cl of View.clouds) drawCloud(ctx, cl, c.z, ca);
+}
+
+// ── club venues: your vehicles (and your friends') hang out here ──
+function venueCrowd(club) {
+  const list = [];
+  const mine = G && G.clubs && G.clubs[club];
+  if (mine) {
+    for (const uid of mine.placed) { const a = G.assets.find((x) => x.uid === uid); if (a) list.push({ id: a.id, color: ASSET_BY_ID[a.id].color, label: G.fam ? famHead().first : 'You', mine: true }); }
+    if (!list.length) list.push({ id: 'person', color: CLUB_BY_ID[club].color, label: G.fam ? famHead().first : 'You', mine: true });
+  }
+  if (typeof Net !== 'undefined' && Net.venue && Net.venue[club]) for (const v of Net.venue[club]) list.push(v);
+  return list.slice(0, 8);
+}
+function venueLabel(ctx, x, y, text, mine, z) {
+  if (z < 0.5) return;
+  ctx.font = '800 9px "Baloo 2", system-ui, sans-serif'; ctx.textAlign = 'center';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(40,24,10,.85)'; ctx.strokeText(text, x, y);
+  ctx.fillStyle = mine ? '#fff3b0' : '#bfe6ff'; ctx.fillText(text, x, y);
+}
+function drawVenue(ctx, L, club, B, z) {
+  const crowd = venueCrowd(club);
+  if (!crowd.length) return;
+  const n = crowd.length, t = View.t;
+  crowd.forEach((v, i) => {
+    if (club === 'car') {
+      const a = t * (0.45 + i * 0.05) + i * TAU / n;
+      const gx = L.x + 2 + Math.cos(a) * 1.42, gy = L.y + 2.15 + Math.sin(a) * 1.04;
+      const x = wx(gx, gy), y = wy(gx, gy);
+      if (v.id === 'person') { venueLabel(ctx, x, y - 6, v.label, v.mine, z); return; }
+      const dx = -Math.sin(a) * 1.42, dy = Math.cos(a) * 1.04;
+      const sp = carSprite(v.color || '#d64b3c', Math.abs(dx) > Math.abs(dy), false, B);
+      ctx.drawImage(sp.c, x - sp.ax, y - sp.ay, sp.w, sp.h);
+      venueLabel(ctx, x, y - 16, v.label, v.mine, z);
+    } else if (club === 'yacht') {
+      const gx = L.x + 0.97 + (i % 4) * 0.85, gy = L.y + 2.9 + Math.floor(i / 4) * 0.6 + Math.sin(t * 1.5 + i) * 0.03;
+      const kind = v.id === 'yacht' ? 'yacht' : v.id === 'sail' ? 'sail' : 'runabout';
+      if (v.id !== 'person') drawBoat(ctx, { x: gx, y: gy, a: Math.PI / 2, kind, sail: kind === 'sail' }, false);
+      venueLabel(ctx, wx(gx, gy), wy(gx, gy) - (kind === 'yacht' ? 30 : 22), v.label, v.mine, z);
+    } else if (club === 'ski') {
+      const k = (t * 0.12 + i / n) % 1;
+      const gx = L.x + lerp(1.55, 0.95, k), gy = L.y + lerp(1.55, 3.5, k), zz = lerp(82, 0, k);
+      const x = wx(gx, gy), y = wy(gx, gy) - zz;
+      ctx.fillStyle = v.color || '#d64b3c'; ctx.beginPath(); ctx.ellipse(x, y - 4, 2, 3, 0.4, 0, TAU); ctx.fill();
+      circle(ctx, x + 0.5, y - 8, 1.8, '#f0c9a4');
+      ctx.strokeStyle = '#2b2d3a'; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.moveTo(x - 4, y + 1); ctx.lineTo(x + 4, y - 1); ctx.stroke();
+      venueLabel(ctx, x, y - 13, v.label, v.mine, z);
+    } else {
+      const gx = L.x + 1.1 + (i % 3) * 0.5, gy = L.y + 1.4 + Math.floor(i / 3) * 0.4 + Math.sin(t * 0.6 + i) * 0.08;
+      const x = wx(gx, gy), y = wy(gx, gy);
+      ctx.fillStyle = v.color || '#3e9b4f'; ctx.beginPath(); ctx.ellipse(x, y - 5, 2, 2.8, 0, 0, TAU); ctx.fill();
+      circle(ctx, x, y - 9.5, 1.9, '#f0c9a4');
+      venueLabel(ctx, x, y - 14, v.label, v.mine, z);
+    }
+  });
 }
 
 // ── picking ──

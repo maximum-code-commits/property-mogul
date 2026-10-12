@@ -192,6 +192,12 @@ function generateCity(seed) {
       factor: 0.86 + rng() * 0.28, water: wf, addr: num + ' ' + street,
       floors: K.fl ? K.fl[0] + Math.floor(rng() * (K.fl[1] - K.fl[0] + 1)) : 1,
     };
+    // age and build quality come from the position, so they never disturb the city's other randomness
+    const ERA = { city: [1965, 2024], suburb: [1885, 2022], snow: [1950, 2023], beach: [1960, 2024], farm: [1860, 2012], lake: [1905, 2023], industrial: [1910, 2018] }[dist.style] || [1900, 2020];
+    const h1 = hash2(x * 7 + 1, y * 13 + 5, seed), h2 = hash2(x * 3 + 11, y * 5 + 17, seed + 1);
+    const lo = K.fl && K.fl[0] >= 10 ? Math.max(ERA[0], 1978) : ERA[0];
+    lot.built = Math.round(lerp(lo, ERA[1], Math.pow(h1, 0.75)));
+    lot.q = Math.round(clamp(0.3 + (K.lux || 1) * 0.13 + h2 * 0.42, 0.2, 1) * 100) / 100;
     lots.push(lot);
     for (let yy = y; yy < y + d; yy++) for (let xx = x; xx < x + w; xx++) lotAt[idx(xx, yy)] = lot.id;
     return lot;
@@ -244,6 +250,19 @@ function generateCity(seed) {
       addLot(x0 + 2, y0 + 2, 2, 2, pickKind(dist, 2, 2), di);
     }
   }
+
+  // club venues: a raceway in Ironvale, marinas on the harbour and the lake
+  const convert = (distId, tx, ty, kind) => {
+    let best = null, bd = 1e9;
+    for (const l of lots) if (l.dist === distId && l.w === 4 && l.d === 4 && KINDS[l.kind].cat !== 'civic') { const dd = Math.hypot(l.x + 2 - tx, l.y + 2 - ty); if (dd < bd) { bd = dd; best = l; } }
+    if (!best) for (const l of lots) if (l.dist === distId && l.w === 4 && l.d === 4 && !['mountain', 'racetrack', 'marina', 'golf'].includes(l.kind)) { const dd = Math.hypot(l.x + 2 - tx, l.y + 2 - ty); if (dd < bd) { bd = dd; best = l; } }
+    if (best) best.kind = kind;
+    return best;
+  };
+  if (!lots.some((l) => l.kind === 'golf')) convert('lake', 78, 24, 'golf');
+  convert('iron', 70, 52, 'racetrack');
+  convert('harbour', 55, 76, 'marina');
+  convert('lake', 84, 18, 'marina');
 
   // a starter cottage in Lychee
   let start = null, bd = 1e9;

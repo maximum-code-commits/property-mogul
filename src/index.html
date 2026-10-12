@@ -23,6 +23,7 @@
       <button class="rbtn" id="btnCompany" data-icon="people" aria-label="Company: team, investors, skills, school" title="Company"><i class="nbadge" hidden></i></button>
       <button class="rbtn" id="btnCity" data-icon="city" aria-label="City: suburbs, council, community" title="City"></button>
       <button class="rbtn" id="btnMarket" data-icon="shop" aria-label="Marketplace and stocks" title="Marketplace"></button>
+      <button class="rbtn" id="btnSocial" hidden data-icon="handshake" aria-label="Online: friends, co-op deals, lending and leaderboard" title="Online"><i class="nbadge" hidden></i></button>
       <button class="rbtn" id="btnHome" data-icon="heart" aria-label="Your home and parties" title="Home &amp; parties"></button>
       <button class="rbtn" id="btnStats" data-icon="chart" aria-label="Stats and achievements" title="Stats"></button>
       <button class="rbtn" id="btnSettings" data-icon="gear" aria-label="Settings" title="Settings"></button>
@@ -69,10 +70,12 @@
         <button id="tNewBtn" class="btn btn-big">New Game</button>
         <button id="tHow" class="btn">How to Play</button>
       </div>
+      <div id="tOnline" class="t-online" hidden></div>
       <form id="tNew" class="t-new" hidden autocomplete="off">
         <label for="mogulName" class="t-lab">Your mogul name</label>
         <input id="mogulName" maxlength="20" placeholder="e.g. Max Moneybags" enterkeyhint="go">
         <fieldset><legend class="t-lab">Choose your agent</legend><div id="agents" class="agents"></div></fieldset>
+        <div id="tCity" class="t-city" hidden><label for="citySel" class="t-lab">City</label><select id="citySel"></select></div>
         <div class="t-row">
           <button type="submit" class="btn btn-big btn-go">Start with $1,000,000</button>
           <button type="button" id="tBack" class="btn">Back</button>

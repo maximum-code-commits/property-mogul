@@ -5,6 +5,7 @@
 function buffs() {
   const b = { party: 0, investor: 0, rep: 0, fun: 0 };
   for (const a of G.assets || []) { const A = ASSET_BY_ID[a.id]; for (const k in A.buffs) b[k] += A.buffs[k]; }
+  for (const id in G.clubs || {}) { const C = CLUB_BY_ID[id]; for (const k in C.buffs) b[k] += C.buffs[k]; }
   return b;
 }
 
@@ -62,7 +63,7 @@ function learn(id) { if (!canLearn(id)) return false; G.skills[id] = G.month; G.
 function enroll(id) {
   const D = DEGREE_BY_ID[id];
   if (G.school || G.degrees[id] != null || G.cash < D.cost || (D.req && G.degrees[D.req] == null)) return false;
-  G.cash -= D.cost; G.school = { id, left: D.months };
+  G.cash -= D.cost; G.school = { id, left: Math.ceil(D.months * (headTrait('scholar') ? 0.75 : 1)) };
   return true;
 }
 
@@ -108,8 +109,11 @@ function buyOutPartner(L, i) {
   const price = Math.round(eq * p.share * 1.03);
   if (G.cash < price) return { ok: false, reason: 'Not enough cash for the buyout.' };
   G.cash -= price;
-  G.inv[p.id].paid += price - (p.put || 0);
-  G.inv[p.id].trust = clamp(G.inv[p.id].trust + 6, 0, 100);
+  if (p.fid) G.outbox.push({ k: 'deal', deal: p.deal, user: p.fid, amount: price, kind: 'buyout', lot: L.id });
+  else {
+    G.inv[p.id].paid += price - (p.put || 0);
+    G.inv[p.id].trust = clamp(G.inv[p.id].trust + 6, 0, 100);
+  }
   st.partners.splice(i, 1);
   return { ok: true, price };
 }
@@ -172,7 +176,7 @@ function throwParty(pid, guests) {
   if (P_.req && !G.assets.some((a) => a.id === P_.req)) return { ok: false, reason: 'You need a superyacht for that.' };
   G.cash -= cost; G.lastParty = G.month; G.stats.parties++;
   const b = buffs();
-  let score = P_.base * venue.score * (1 + b.party / 50) * (hasSkill('soc1') ? 1.25 : 1) * (0.8 + rnd() * 0.4);
+  let score = P_.base * venue.score * (1 + b.party / 50) * (hasSkill('soc1') ? 1.25 : 1) * (headTrait('host') ? 1.2 : 1) * (0.8 + rnd() * 0.4);
   score = Math.round(score);
   const out = { score, lines: [], met: null, venue: venue.text, cost };
   const rep = Math.round(score / 12 * 10) / 10;
@@ -295,6 +299,7 @@ function queueDecision(d) { if (G.queue.length < 6) G.queue.push(d); }
 function maybeIssue(L, st) {
   let p = 0.012 * (1.6 - st.cond) * Math.min(3, 0.7 + st.units.length / 6);
   if (hasSkill('land3')) p *= 0.7;
+  if (headTrait('lucky')) p *= 0.7;
   if (rnd() >= p) return;
   const k = kindOf(L), K = KINDS[k], style = DISTRICT_BY_ID[L.dist].style;
   const occ = st.units.some((u) => u && u.r);
@@ -354,7 +359,8 @@ function rollSituation() {
 // Each choice: { label, sub, fx: () => outcome text }
 function decisionCard(d) {
   const L = d.lot != null ? CITY.lots[d.lot] : null, st = L ? lotState(L.id) : null;
-  const free = ['offmarket', 'gala', 'journalist', 'tip', 'intro', 'school'];
+  const free = ['offmarket', 'gala', 'journalist', 'tip', 'intro', 'school', 'romance'];
+  if (d.type === 'succession') return null;
   if (!free.includes(d.type) && (!st || !st.o || st.build && d.type !== 'petition')) return null;
   if (d.type === 'offmarket' && st) return null;
   if (d.type === 'exit' && !(st.partners || []).some((p) => p.id === d.inv)) return null;
@@ -468,6 +474,9 @@ function decisionCard(d) {
         choices: [{ label: 'Lunch is on me ($500)', fx: () => { pay(500); G.inv[X.id].met = true; G.inv[X.id].trust = 30; return `${X.name} is now in your investor network.`; } },
           { label: 'Not now', fx: () => 'Maybe another time.' }] };
     },
+    romance: () => ({ who: 'neighbour', title: 'Love is in the air', text: `You keep bumping into ${d.name} at the farmers’ market. Sparks are flying.`,
+      choices: [{ label: 'Propose (wedding $40,000)', fx: () => { pay(40000); addMember({ first: d.name, born: famHead().born + Math.round((rnd() - 0.5) * 72), role: 'spouse', of: famHead().id, gen: famHead().gen }); G.rep += 2; return `You married ${d.name}! The whole street came to the party.`; } },
+        { label: 'Stay focused on business', fx: () => 'Your portfolio is your one true love.' }] }),
     school: () => ({ who: 'neighbour', title: 'School fundraiser', text: 'The local primary school is raising money for a new playground.',
       choices: [{ label: 'Sponsor it ($25,000)', fx: () => { pay(25000); G.rep += 2; sentiment(pick(rnd, DISTRICTS).id, 5, 'donate', null); return 'The kids made you a giant thank-you card.'; } },
         { label: 'Buy a raffle ticket ($20)', fx: () => { pay(20); if (rnd() < 0.1) { G.cash += 5000; return 'You won the meat tray AND $5,000!'; } return 'You didn’t win the meat tray.'; } }] }),
@@ -574,7 +583,7 @@ function negoOffer(N, amount) {
     N.log.push({ me: false, t: ratio < 0.78 ? 'Frankly, that’s insulting. The seller has walked away.' : 'The seller is tired of haggling and has walked away for now.' });
     return 'walk';
   }
-  let concede = 0.28 + rnd() * 0.15 + (hasSkill('dealer1') ? 0.05 : 0) + (perk('negotiate') ? 0.06 : 0) + lawyer;
+  let concede = 0.28 + rnd() * 0.15 + (hasSkill('dealer1') ? 0.05 : 0) + (perk('negotiate') ? 0.06 : 0) + (headTrait('shark') ? 0.06 : 0) + lawyer;
   const newAsk = Math.max(N.res * 1.01, N.ask - (N.ask - amount) * concede);
   N.ask = Math.round(newAsk / 1000) * 1000;
   N.log.push({ me: false, t: pick(rnd, [`They’ve come down to ${fmt$(N.ask)}.`, `Best they can do is ${fmt$(N.ask)}.`, `Counter-offer: ${fmt$(N.ask)}. Their patience is wearing thin.`]) });
